@@ -1,0 +1,5 @@
+[user]
+	email = qgibson3@students.kennesaw.edu
+	name = Quentin Gibson
+[core]
+	excludesFile = ~/.gitignore
