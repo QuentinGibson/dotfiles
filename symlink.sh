@@ -18,4 +18,8 @@ main () {
   done
 }
 
+
+
+exgit clone https://github.com/lukechilds/zsh-nvm ~/.oh-my-zsh/custom/plugins/zsh-nvm
+
 main

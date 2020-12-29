@@ -50,8 +50,6 @@ set backspace=indent,eol,start
 
 nnoremap Q @q
 nnoremap Y y$
-noremap K     {
-noremap J     }
 noremap H     ^
 noremap L     $
 
@@ -118,10 +116,15 @@ Plug 'tpope/vim-endwise'
 Plug 'tpope/vim-unimpaired'
 Plug 'mbbill/undotree'
 Plug 'mattn/emmet-vim'
-Plug 'sirver/UltiSnips'
+if has('python3')
+  Plug 'sirver/UltiSnips'
+endif
 " gc{motion} to comment
 Plug 'tpope/vim-commentary'
 Plug 'pangloss/vim-javascript'
+Plug 'leafgarland/typescript-vim'
+Plug 'tpope/vim-obsession'
+
 " Favorite Color Scheme
 Plug 'morhetz/gruvbox'
 " FZF - To search files by name
@@ -129,6 +132,12 @@ Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
 Plug 'junegunn/fzf.vim'
 " LSP
 Plug 'neoclide/coc.nvim', {'branch': 'release'}
+
+Plug 'neoclide/coc.nvim', {'branch': 'release'}
+let g:coc_global_extensions = [
+  \ 'coc-tsserver'
+  \ ]
+
 " Rainbow Colors
 Plug 'kien/rainbow_parentheses.vim'
 " Auto Pairs
@@ -142,35 +151,57 @@ Plug 'mileszs/ack.vim'
 " Tagbar
 Plug 'majutsushi/tagbar'
 " Linting
-Plug 'dense-analysis/ale'
+" Plug 'dense-analysis/ale'
 call plug#end()
 
 colorscheme gruvbox
 
 " find new bindings
-" nnoremap ]g :ALENextWrap<CR>     
-" nnoremap [g :ALEPreviousWrap<CR>
 
 let g:sneak#streak = 1
 
+nmap <silent> ]g <Plug>(coc-diagnostic-prev)
+nmap <silent> [g <Plug>(coc-diagnostic-next)
 nmap <silent> gd <Plug>(coc-definition)
 nmap <silent> gr <Plug>(coc-references)
+nmap <silent> gy <Plug>(coc-type-definition)
+nmap <silent> gi <Plug>(coc-implementation)
+nmap <silent> gr <Plug>(coc-references)
+nmap <silent> do <Plug>(coc-codeaction)
+nmap <leader>rn <Plug>(coc-rename)
+nmap <silent> <leader>f <Plug>(coc-fix-current)
+
+nmap <silent> K :call CocAction('doHover')<CR>
+nmap <silent> <leader>d :<C-u>CocList diagnostic<cr>
+nmap <silent> <leader>i :<C-u>CocList symbols<cr>
+
+" Remap <C-f> and <C-b> for scroll float windows/popups.
+if has('nvim-0.4.0') || has('patch-8.2.0750')
+  nnoremap <silent><nowait><expr> <C-f> coc#float#has_scroll() ? coc#float#scroll(1) : "\<C-f>"
+  nnoremap <silent><nowait><expr> <C-b> coc#float#has_scroll() ? coc#float#scroll(0) : "\<C-b>"
+  inoremap <silent><nowait><expr> <C-f> coc#float#has_scroll() ? "\<c-r>=coc#float#scroll(1)\<cr>" : "\<Right>"
+  inoremap <silent><nowait><expr> <C-b> coc#float#has_scroll() ? "\<c-r>=coc#float#scroll(0)\<cr>" : "\<Left>"
+  vnoremap <silent><nowait><expr> <C-f> coc#float#has_scroll() ? coc#float#scroll(1) : "\<C-f>"
+  vnoremap <silent><nowait><expr> <C-b> coc#float#has_scroll() ? coc#float#scroll(0) : "\<C-b>"
+endif
+
 
 nnoremap <leader>f :Files<CR>
 nnoremap <leader>g :GFiles<CR>
 
 " Lint Setup
-let g:ale_linters = {
-      \   'ruby': ['rubocop'],
-      \   'python': ['flake8', 'pylint'],
-      \   'javascript': ['eslint'],
-      \}
+" let g:ale_linters = {
+"       \ageFunction returns a Promise, then page.$$eval would wait for the¬
+"        >>  14   }¬                           promise to'ruby': ['rubocop'],
+"       \   'python': ['flake8', 'pylint'],
+"       \   'javascript': ['eslint'],
+"       \}
 
 " Autofix setup
-let g:ale_fixers = {
-   \    'ruby': ['rubocop'],
-   \}
-let g:ale_fix_on_save = 1 
+" let g:ale_fixers = {
+"    \    'ruby': ['rubocop'],
+"    \}
+" let g:ale_fix_on_save = 1 
 
 " Use ripgrep for searching ⚡️
  let g:ackprg = 'rg --vimgrep --type-not sql --smart-case'
@@ -216,3 +247,22 @@ function! s:check_back_space() abort
   let col = col('.') - 1
   return !col || getline('.')[col - 1]  =~# '\s'
 endfunction
+
+if isdirectory('./node_modules') && isdirectory('./node_modules/prettier')
+  let g:coc_global_extensions += ['coc-prettier']
+endif
+
+if isdirectory('./node_modules') && isdirectory('./node_modules/eslint')
+  let g:coc_global_extensions += ['coc-eslint']
+endif
+
+function! ShowDocIfNoDiagnostic(timer_id)
+  if (coc#float#has_float() == 0)
+    silent call CocActionAsync('doHover')
+  endif
+endfunction
+
+function! s:show_hover_doc()
+  call timer_start(500, 'ShowDocIfNoDiagnostic')
+endfunction
+

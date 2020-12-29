@@ -7,7 +7,7 @@ fi
 
 export ZSH=$HOME/.oh-my-zsh
 ZSH_THEME="powerlevel10k/powerlevel10k"
-plugins=(git gem nvm rails fasd github npm)
+plugins=(git gem nvm rails fasd github npm zsh-nvm)
 source $ZSH/oh-my-zsh.sh
 
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
