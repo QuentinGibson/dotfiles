@@ -108,6 +108,7 @@ endif
 call plug#begin('~/.vim/plugged')
 " I Need these
 Plug 'tpope/vim-surround'
+Plug 'ggreer/the_silver_searcher'
 Plug 'justinmk/vim-sneak'
 Plug 'tpope/vim-repeat'
 Plug 'tpope/vim-fugitive'
@@ -171,7 +172,7 @@ nmap <silent> do <Plug>(coc-codeaction)
 nmap <leader>rn <Plug>(coc-rename)
 nmap <silent> <leader>f <Plug>(coc-fix-current)
 
-nmap <silent> K :call CocAction('doHover')<CR>
+" nmap <silent> K :call CocAction('doHover')<CR>
 nmap <silent> <leader>d :<C-u>CocList diagnostic<cr>
 nmap <silent> <leader>i :<C-u>CocList symbols<cr>
 
@@ -265,4 +266,18 @@ endfunction
 function! s:show_hover_doc()
   call timer_start(500, 'ShowDocIfNoDiagnostic')
 endfunction
+
+if executable('ag')
+  " Use ag over grep
+  set grepprg=ag\ --nogroup\ --nocolor
+
+  " Use ag in CtrlP for listing files. Lightning fast and respects .gitignore
+  let g:ctrlp_user_command = 'ag %s -l --nocolor -g ""'
+
+  " ag is fast enough that CtrlP doesn't need to cache
+  let g:ctrlp_use_caching = 0
+endif
+
+" bind K to grep word under cursor
+nnoremap K :grep! "\b<C-R><C-W>\b"<CR>:cw<CR>
 
