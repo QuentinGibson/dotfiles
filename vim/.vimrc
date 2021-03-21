@@ -3,9 +3,9 @@ let mapleader=" "
 set autoread
 au FocusGained,BufEnter * checktime
 
-set hid
-
 set hidden
+set nowrap           " do not automatically wrap on load
+set formatoptions-=t " do not automatically wrap text when typing
 set noswapfile
 set termguicolors
 set nobackup

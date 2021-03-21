@@ -3,6 +3,7 @@
 # confirmations, etc.) must go above this block; everything else may go below.
 if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
+  typeset -g POWERLEVEL9K_INSTANT_PROMPT=quiet
 fi
 
 export ZSH=$HOME/.oh-my-zsh
@@ -21,3 +22,7 @@ export PATH="$PATH:/home/pablo/PathPicker/debian/usr/bin"
 export PATH="$PATH:$HOME/.rvm/bin"
 
 export PATH="$(yarn global bin):$PATH"
+
+alias chrome="/Applications/Google\\ \\Chrome.app/Contents/MacOS/Google\\ \\Chrome"
+
+export HOMEBREW_GITHUB_API_TOKEN="f70ad763f4e0786c8c51ac2763284c8f83b4185d"
