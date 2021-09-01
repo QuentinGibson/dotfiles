@@ -1,5 +1,9 @@
 let mapleader=" "
 
+if has('win32')
+  let $rc='C:/Users/quent/AppData/Local/nvim/init.vim'
+endif
+
 set autoread
 au FocusGained,BufEnter * checktime
 
@@ -40,18 +44,22 @@ set background=dark
 map j gj
 map k gk
 
+tnoremap jj <C-\><C-n>
 inoremap <C-k> <Up>
 inoremap <C-j> <Down>
 inoremap <C-h> <Left>
 inoremap <C-l> <Right>
 inoremap <C-p> <C-r>+
+inoremap jj <Esc>
 
 set backspace=indent,eol,start
 
 nnoremap Q @q
 nnoremap Y y$
-noremap H     ^
-noremap L     $
+noremap H  ^
+noremap L  $
+noremap : ;
+noremap ; :
 
 nnoremap <leader>1 :Vex<Cr>
 nnoremap <leader>t :tabnew<Cr>
@@ -67,10 +75,9 @@ nnoremap <leader>e :e<Space>
 nnoremap <leader>p "+p
 nnoremap <leader>[ "+P
 nnoremap <leader>u :UndotreeShow<CR>
-noremap <leader>J J
 nnoremap <leader><leader>q :q!<CR>
-nnoremap <leader><leader>s :source ~/.vimrc<CR>
-nnoremap <leader><leader>e :e ~/.vimrc<CR>
+nnoremap <leader><leader>s :source $rc<CR>
+nnoremap <leader><leader>e :e $rc<CR>
 nnoremap <leader><leader>, :PlugInstall<CR>
 nnoremap <leader><leader>m :terminal<CR>
 
@@ -82,7 +89,7 @@ autocmd!
     autocmd VimLeave * set guicursor=a:hor20
 augroup END
 
-let g:netrw_banner = 0
+let g:netrw_banner = 1
 let g:netrw_liststyle = 3
 let g:netrw_browse_split = 2
 let g:netrw_winsize = 20
@@ -99,14 +106,10 @@ set statusline+=%3*\ ::\ %*
 set statusline+=%3*\ %L\ %*
 set statusline+=%3*\ %P\ %*
 
-if empty(glob('~/.vim/autoload/plug.vim'))
-    silent !curl -fLo ~/.vim/autoload/plug.vim --create-dirs
-        \ https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
-    autocmd VimEnter * PlugInstall --sync | source $MYVIMRC
-endif
-
 call plug#begin('~/.vim/plugged')
 " I Need these
+Plug 'grvcoelho/vim-javascript-snippets'
+Plug 'https://gitlab.com/protesilaos/tempus-themes-vim.git'
 Plug 'tpope/vim-surround'
 Plug 'ggreer/the_silver_searcher'
 Plug 'justinmk/vim-sneak'
@@ -124,6 +127,7 @@ endif
 Plug 'tpope/vim-commentary'
 Plug 'pangloss/vim-javascript'
 Plug 'leafgarland/typescript-vim'
+Plug 'MaxMEllon/vim-jsx-pretty'
 Plug 'tpope/vim-obsession'
 
 " Favorite Color Scheme
@@ -151,11 +155,12 @@ Plug 'tpope/vim-endwise'
 Plug 'mileszs/ack.vim'
 " Tagbar
 Plug 'majutsushi/tagbar'
+
 " Linting
 " Plug 'dense-analysis/ale'
 call plug#end()
 
-colorscheme gruvbox
+colorscheme tempus_future
 
 " find new bindings
 
@@ -189,20 +194,6 @@ endif
 
 nnoremap <leader>f :Files<CR>
 nnoremap <leader>g :GFiles<CR>
-
-" Lint Setup
-" let g:ale_linters = {
-"       \ageFunction returns a Promise, then page.$$eval would wait for the¬
-"        >>  14   }¬                           promise to'ruby': ['rubocop'],
-"       \   'python': ['flake8', 'pylint'],
-"       \   'javascript': ['eslint'],
-"       \}
-
-" Autofix setup
-" let g:ale_fixers = {
-"    \    'ruby': ['rubocop'],
-"    \}
-" let g:ale_fix_on_save = 1 
 
 " Use ripgrep for searching ⚡️
  let g:ackprg = 'rg --vimgrep --type-not sql --smart-case'
@@ -280,4 +271,3 @@ endif
 
 " bind K to grep word under cursor
 nnoremap K :grep! "\b<C-R><C-W>\b"<CR>:cw<CR>
-
