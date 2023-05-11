@@ -28,9 +28,7 @@ if ! command -v make &> /dev/null; then
     exit 1
   fi
   
-  echo "git and make installation complete."
-else
-  echo "git and make are already installed."
+  echo "make installation complete."
 fi
 
 if ! command -v git &> /dev/null; then
@@ -46,9 +44,7 @@ if ! command -v git &> /dev/null; then
     exit 1
   fi
   
-  echo "git and make installation complete."
-else
-  echo "git and make are already installed."
+  echo "git installation complete."
 fi
 
 if ! command -v flyctl &> /dev/null; then
@@ -58,8 +54,6 @@ if ! command -v flyctl &> /dev/null; then
   curl -L https://fly.io/install.sh | sh
   
   echo "flyctl installation complete."
-else
-  echo "fly command is already installed."
 fi
 
 export FLYCTL_INSTALL="$HOME/.fly"
@@ -73,15 +67,11 @@ if ! command -v asdf &> /dev/null; then
   git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.11.3
   
   echo "asdf installation complete."
-else
-  echo "asdf is already installed."
 fi
 # End install asdf
 
 # Install Nodejs using asdf
-if asdf plugin list | grep -q "nodejs"; then
-  echo "NodeJS already installed"
-else
+if ! asdf plugin list | grep -q "nodejs"; then
   echo "Nodejs is not installed. Installing..."
 
   # Install the plugin using asdf plugin-add command
@@ -91,7 +81,7 @@ else
   asdf install nodejs latest
   asdf global nodejs latest
   
-  echo "<plugin_name> installation complete."
+  echo "Nodejs installation complete."
 fi
 
 # Install Python3 and pip
@@ -111,8 +101,6 @@ if ! command -v python3 &> /dev/null || ! command -v pip &> /dev/null; then
   fi
   
   echo "Python3 and pip installation complete."
-else
-  echo "Python3 and pip are already installed."
 fi
 
 # Install rustup
@@ -123,8 +111,6 @@ if ! command -v rustup &> /dev/null; then
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
   
   echo "rustup installation complete."
-else
-  echo "rustup is already installed."
 fi
 
 # Install Lazygit
@@ -145,8 +131,6 @@ if ! command -v lazygit &> /dev/null; then
   rm lazygit.tar.gz lazygit
   
   echo "lazygit installation complete."
-else
-  echo "lazygit is already installed."
 fi
 
 #Install Neovim
@@ -164,7 +148,5 @@ if ! command -v nvim &> /dev/null; then
   sudo make install
   
   echo "Neovim installation complete."
-else
-  echo "Neovim is already installed."
 fi
 
