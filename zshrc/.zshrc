@@ -15,3 +15,17 @@ source $ZSH/oh-my-zsh.sh
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
 export EDITOR="vim"
 clear
+
+if ! command -v fly &> /dev/null; then
+  echo "fly command is not found. Installing flyctl..."
+
+  # Install flyctl using curl
+  curl -L https://fly.io/install.sh | sh
+  
+  echo "flyctl installation complete."
+else
+  echo "fly command is already installed."
+fi
+
+export FLYCTL_INSTALL="$HOME/.fly"
+export PATH="$FLYCTL_INSTALL/bin:$PATH"
