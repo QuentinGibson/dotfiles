@@ -22,7 +22,7 @@ if ! command -v make &> /dev/null; then
     brew install build-essential
   elif [[ "$OSTYPE" == "linux-gnu" ]]; then
     # Linux using apt-get
-    sudo apt-get install build-essential
+    sudo apt-get install build-essential -y
   else
     echo "Unsupported operating system."
     exit 1
@@ -35,10 +35,10 @@ if ! command -v git &> /dev/null; then
   echo "Git is not found. Installing git..."
   if [[ "$OSTYPE" == "darwin"* ]]; then
     # macOS using Homebrew
-    brew install git
+    brew install git -y
   elif [[ "$OSTYPE" == "linux-gnu" ]]; then
     # Linux using apt-get
-    sudo apt-get install git
+    sudo apt-get install git -y
   else
     echo "Unsupported operating system."
     exit 1
@@ -94,7 +94,7 @@ if ! command -v python3 &> /dev/null || ! command -v pip &> /dev/null; then
     brew install python
   elif [[ "$OSTYPE" == "linux-gnu" ]]; then
     # Linux using apt-get
-    sudo apt-get install python3 python3-pip
+    sudo apt-get install python4 python3-pip -y
   else
     echo "Unsupported operating system."
     exit 1
@@ -137,16 +137,40 @@ fi
 if ! command -v nvim &> /dev/null; then
   echo "Neovim is not found. Installing..."
 
-  # Clone the Neovim repository and checkout the v0.9 branch
-  git clone https://github.com/neovim/neovim.git ~/neovim --branch v0.9
+  # Create a temporary directory
+  tmpdir=$(mktemp -d)
+
+  # Change to the temporary directory
+  cd "$tmpdir"
+
+  # Download Neovim archive
+  curl -LO https://github.com/neovim/neovim/releases/download/stable/nvim.appimage
+
+  # Make the AppImage executable
+  chmod u+x nvim.appimage
   
-  # Change to the Neovim directory
-  cd ~/neovim
-  
-  # Build and install Neovim
-  make CMAKE_BUILD_TYPE=RelWithDebInfo
-  sudo make install
+  # Move the AppImage to the bin directory
+  mv nvim.appimage /usr/local/bin/nvim
   
   echo "Neovim installation complete."
+
+  # Cleanup the temporary directory
+  rm -rf "$tmpdir"
 fi
 
+# Setup Git
+if ! git config --get user.name &> /dev/null || ! git config --get user.email &> /dev/null; then
+  echo "Git configuration is incomplete. Setting up..."
+
+  # Set Git username
+  read -p "Enter your Git username: " username
+  git config --global user.name "$username"
+
+  # Set Git email
+  read -p "Enter your Git email: " email
+  git config --global user.email "$email"
+
+  echo "Git configuration complete."
+else
+  echo "Git configuration is already set."
+fi
