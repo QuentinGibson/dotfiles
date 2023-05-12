@@ -57,7 +57,7 @@ if ! command -v flyctl &> /dev/null; then
 fi
 
 export FLYCTL_INSTALL="$HOME/.fly"
-export PATH="$FLYCTL_INSTALL/bin:$PATH"
+path+=("$FLYCTL_INSTALL/bin")
 
 # Install asdf
 if ! command -v asdf &> /dev/null; then
@@ -94,7 +94,7 @@ if ! command -v python3 &> /dev/null || ! command -v pip &> /dev/null; then
     brew install python
   elif [[ "$OSTYPE" == "linux-gnu" ]]; then
     # Linux using apt-get
-    sudo apt-get install python4 python3-pip -y
+    sudo apt-get install python3 python3-pip -y
   else
     echo "Unsupported operating system."
     exit 1
@@ -104,7 +104,7 @@ if ! command -v python3 &> /dev/null || ! command -v pip &> /dev/null; then
 fi
 
 # Install rustup
-if ! command -v rustup &> /dev/null; then
+if ! command -v rustc &> /dev/null; then
   echo "rustup is not found. Installing..."
 
   # Install rustup using the provided command
@@ -112,6 +112,7 @@ if ! command -v rustup &> /dev/null; then
   
   echo "rustup installation complete."
 fi
+path+=('$HOME/.cargo/bin')
 
 # Install Lazygit
 if ! command -v lazygit &> /dev/null; then
@@ -133,30 +134,6 @@ if ! command -v lazygit &> /dev/null; then
   echo "lazygit installation complete."
 fi
 
-#Install Neovim
-if ! command -v nvim &> /dev/null; then
-  echo "Neovim is not found. Installing..."
-
-  # Create a temporary directory
-  tmpdir=$(mktemp -d)
-
-  # Change to the temporary directory
-  cd "$tmpdir"
-
-  # Download Neovim archive
-  curl -LO https://github.com/neovim/neovim/releases/download/stable/nvim.appimage
-
-  # Make the AppImage executable
-  chmod u+x nvim.appimage
-  
-  # Move the AppImage to the bin directory
-  mv nvim.appimage /usr/local/bin/nvim
-  
-  echo "Neovim installation complete."
-
-  # Cleanup the temporary directory
-  rm -rf "$tmpdir"
-fi
 
 # Setup Git
 if ! git config --get user.name &> /dev/null || ! git config --get user.email &> /dev/null; then
@@ -174,3 +151,32 @@ if ! git config --get user.name &> /dev/null || ! git config --get user.email &>
 else
   echo "Git configuration is already set."
 fi
+
+#Install Neovim
+if ! command -v nvim &> /dev/null; then
+  echo "Neovim is not found. Installing..."
+
+  # Create a temporary directory
+  tmpdir=$(mktemp -d)
+
+  # Change to the temporary directory
+  cd "$tmpdir"
+
+  # Download Neovim archive
+  curl -LO https://github.com/neovim/neovim/releases/download/stable/nvim.appimage
+
+  # Make the AppImage executable
+  chmod u+x nvim.appimage
+  
+  # Move the AppImage to the bin directory
+  # Create a temporary directory
+  sudo mv nvim.appimage /usr/local/bin/nvim
+  
+  echo "Neovim installation complete."
+
+  # Cleanup the temporary directory
+  rm -rf "$tmpdir"
+fi
+
+export PATH
+
