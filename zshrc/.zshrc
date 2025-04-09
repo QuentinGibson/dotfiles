@@ -1,226 +1,103 @@
-# Enable Powerlevel10k instant prompt. Should stay close to the top of ~/.zshrc.
-# Initialization code that may require console input (password prompts, [y/n]
-# confirmations, etc.) must go above this block; everything else may go below.
-if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
-  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
-  typeset -g POWERLEVEL9K_INSTANT_PROMPT=quiet
-fi
+# If you come from bash you might have to change your $PATH.
+# export PATH=$HOME/bin:$HOME/.local/bin:/usr/local/bin:$PATH
 
-export ZSH=$HOME/.oh-my-zsh
-ZSH_THEME="powerlevel10k/powerlevel10k"
-plugins=(git gem nvm rails fasd github npm asdf zsh-syntax-highlighting zsh-autosuggestions dirhistory copyfile web-search)
+# Path to your Oh My Zsh installation.
+export ZSH="$HOME/.oh-my-zsh"
+
+# Set name of the theme to load --- if set to "random", it will
+# load a random theme each time Oh My Zsh is loaded, in which case,
+# to know which specific one was loaded, run: echo $RANDOM_THEME
+# See https://github.com/ohmyzsh/ohmyzsh/wiki/Themes
+ZSH_THEME="robbyrussell"
+
+# Set list of themes to pick from when loading at random
+# Setting this variable when ZSH_THEME=random will cause zsh to load
+# a theme from this variable instead of looking in $ZSH/themes/
+# If set to an empty array, this variable will have no effect.
+# ZSH_THEME_RANDOM_CANDIDATES=( "robbyrussell" "agnoster" )
+
+# Uncomment the following line to use case-sensitive completion.
+# CASE_SENSITIVE="true"
+
+# Uncomment the following line to use hyphen-insensitive completion.
+# Case-sensitive completion must be off. _ and - will be interchangeable.
+# HYPHEN_INSENSITIVE="true"
+
+# Uncomment one of the following lines to change the auto-update behavior
+# zstyle ':omz:update' mode disabled  # disable automatic updates
+# zstyle ':omz:update' mode auto      # update automatically without asking
+# zstyle ':omz:update' mode reminder  # just remind me to update when it's time
+
+# Uncomment the following line to change how often to auto-update (in days).
+# zstyle ':omz:update' frequency 13
+
+# Uncomment the following line if pasting URLs and other text is messed up.
+# DISABLE_MAGIC_FUNCTIONS="true"
+
+# Uncomment the following line to disable colors in ls.
+# DISABLE_LS_COLORS="true"
+
+# Uncomment the following line to disable auto-setting terminal title.
+# DISABLE_AUTO_TITLE="true"
+
+# Uncomment the following line to enable command auto-correction.
+# ENABLE_CORRECTION="true"
+
+# Uncomment the following line to display red dots whilst waiting for completion.
+# You can also set it to another string to have that shown instead of the default red dots.
+# e.g. COMPLETION_WAITING_DOTS="%F{yellow}waiting...%f"
+# Caution: this setting can cause issues with multiline prompts in zsh < 5.7.1 (see #5765)
+# COMPLETION_WAITING_DOTS="true"
+
+# Uncomment the following line if you want to disable marking untracked files
+# under VCS as dirty. This makes repository status check for large repositories
+# much, much faster.
+# DISABLE_UNTRACKED_FILES_DIRTY="true"
+
+# Uncomment the following line if you want to change the command execution time
+# stamp shown in the history command output.
+# You can set one of the optional three formats:
+# "mm/dd/yyyy"|"dd.mm.yyyy"|"yyyy-mm-dd"
+# or set a custom format using the strftime function format specifications,
+# see 'man strftime' for details.
+# HIST_STAMPS="mm/dd/yyyy"
+
+# Would you like to use another custom folder than $ZSH/custom?
+# ZSH_CUSTOM=/path/to/new-custom-folder
+
+# Which plugins would you like to load?
+# Standard plugins can be found in $ZSH/plugins/
+# Custom plugins may be added to $ZSH_CUSTOM/plugins/
+# Example format: plugins=(rails git textmate ruby lighthouse)
+# Add wisely, as too many plugins slow down shell startup.
+plugins=(git zsh-syntax-highlighting)
+
 source $ZSH/oh-my-zsh.sh
 
-# To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
-[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
-export EDITOR="vim"
-clear
+# User configuration
 
-if ! command -v make &> /dev/null; then
-  echo "Make is not found. Installing build-essentials..."
-  if [[ "$OSTYPE" == "darwin"* ]]; then
-    brew install build-essential
-  elif [[ "$OSTYPE" == "linux-gnu" ]]; then
-    # Linux using apt-get
-    sudo apt-get install build-essential -y
-  else
-    echo "Unsupported operating system."
-    exit 1
-  fi
+# export MANPATH="/usr/local/man:$MANPATH"
 
-  echo "make installation complete."
-fi
+# You may need to manually set your language environment
+# export LANG=en_US.UTF-8
 
-if ! command -v git &> /dev/null; then
-  echo "Git is not found. Installing git..."
-  if [[ "$OSTYPE" == "darwin"* ]]; then
-    # macOS using Homebrew
-    brew install git -y
-  elif [[ "$OSTYPE" == "linux-gnu" ]]; then
-    # Linux using apt-get
-    sudo apt-get install git -y
-  else
-    echo "Unsupported operating system."
-    exit 1
-  fi
+export EDITOR='nvim'
 
-  echo "git installation complete."
-fi
+# Compilation flags
+# export ARCHFLAGS="-arch $(uname -m)"
 
-if [ ! -d "$HOME/.fly" ]; then
-  echo "fly command is not found. Installing flyctl..."
+# Set personal aliases, overriding those provided by Oh My Zsh libs,
+# plugins, and themes. Aliases can be placed here, though Oh My Zsh
+# users are encouraged to define aliases within a top-level file in
+# the $ZSH_CUSTOM folder, with .zsh extension. Examples:
+# - $ZSH_CUSTOM/aliases.zsh
+# - $ZSH_CUSTOM/macos.zsh
+# For a full list of active aliases, run `alias`.
+#
+# Example aliases
+# alias zshconfig="mate ~/.zshrc"
+# alias ohmyzsh="mate ~/.oh-my-zsh"
+#
+eval $(/home/linuxbrew/.linuxbrew/bin/brew shellenv)
 
-  # Install flyctl using curl
-  curl -L https://fly.io/install.sh | sh
-
-  echo "flyctl installation complete."
-fi
-
-export FLYCTL_INSTALL="$HOME/.fly"
-path+=("$FLYCTL_INSTALL/bin")
-
-# Install asdf
-if ! command -v asdf &> /dev/null; then
-  echo "asdf is not found. Installing..."
-
-  # Clone the asdf repository and checkout the specified branch
-  git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.11.3
-
-  echo "asdf installation complete."
-fi
-# End install asdf
-
-# Install Nodejs using asdf
-if ! asdf plugin list | grep -q "nodejs"; then
-  echo "Nodejs is not installed. Installing..."
-
-  # Install the plugin using asdf plugin-add command
-  asdf plugin add nodejs https://github.com/asdf-vm/asdf-nodejs.git
-
-  #Set up the latest version
-  asdf install nodejs latest
-  asdf global nodejs latest
-
-  echo "Nodejs installation complete."
-fi
-
-# Install Python3 and pip
-if ! command -v python3 &> /dev/null || ! command -v pip &> /dev/null; then
-  echo "Python3 or pip is not found. Installing..."
-
-  # Install python3 and pip using the package manager
-  if [[ "$OSTYPE" == "darwin"* ]]; then
-    # macOS using Homebrew
-    brew install python
-  elif [[ "$OSTYPE" == "linux-gnu" ]]; then
-    # Linux using apt-get
-    sudo apt-get install python3 python3-pip -y
-  else
-    echo "Unsupported operating system."
-    exit 1
-  fi
-
-  echo "Python3 and pip installation complete."
-fi
-
-# Install rustup
-if ! command -v rustc &> /dev/null; then
-  echo "rustup is not found. Installing..."
-
-  # Install rustup using the provided command
-  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-  echo "rustup installation complete."
-fi
-path+=('$HOME/.cargo/bin')
-
-# Install Lazygit
-if ! command -v lazygit &> /dev/null; then
-  echo "lazygit is not found. Installing..."
-
-  # Get the latest version from GitHub API
-  LAZYGIT_VERSION=$(curl -s "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" | grep -Po '"tag_name": "v\K[^"]*')
-
-  # Download and extract the binary
-  curl -Lo lazygit.tar.gz "https://github.com/jesseduffield/lazygit/releases/latest/download/lazygit_${LAZYGIT_VERSION}_Linux_x86_64.tar.gz"
-  tar xf lazygit.tar.gz lazygit
-
-  # Install the binary
-  sudo install lazygit /usr/local/bin
-
-  # Clean up the downloaded files
-  rm lazygit.tar.gz lazygit
-
-  echo "lazygit installation complete."
-fi
-
-
-# Setup Git
-if ! git config --get user.name &> /dev/null || ! git config --get user.email &> /dev/null; then
-  echo "Git configuration is incomplete. Setting up..."
-
-  # Set Git username
-  read -p "Enter your Git username: " username
-  git config --global user.name "$username"
-
-  # Set Git email
-  read -p "Enter your Git email: " email
-  git config --global user.email "$email"
-
-  echo "Git configuration complete."
-fi
-
-#Install Neovim
-if ! command -v nvim &> /dev/null; then
-  echo "Neovim is not found. Installing..."
-
-  # Create a temporary directory
-  tmpdir=$(mktemp -d)
-
-  # Change to the temporary directory
-  cd "$tmpdir"
-
-  # Download Neovim archive
-  curl -LO https://github.com/neovim/neovim/releases/download/stable/nvim.appimage
-
-  # Make the AppImage executable
-  chmod u+x nvim.appimage
-
-  # Move the AppImage to the bin directory
-  # Create a temporary directory
-  sudo mv nvim.appimage /usr/local/bin/nvim
-
-  echo "Neovim installation complete."
-
-  # Cleanup the temporary directory
-  rm -rf "$tmpdir"
-fi
-
-
-#Install Neovim
-if ! command -v tmux &> /dev/null; then
-  echo "Tmux not found installing"
-
-  sudo apt install libevent-dev ncurses-dev build-essential bison pkg-config -y
-
-  # Create a temporary directory
-  tmpdir=$(mktemp -d)
-
-  # Change to the temporary directory
-  cd "$tmpdir"
-
-  # Download Tmux tar
-  curl -LO https://github.com/tmux/tmux/releases/download/3.3a/tmux-3.3a.tar.gz
-
-  # extract the tar
-  tar -xzvf tmux-3.3a.tar.gz
-
-  #change directories to the tmux directory
-  cd tmux-3.3a
-
-  #configure and install tmux
-  ./configure && make
-  sudo make install
-
-
-  echo "Tmux installation complete"
-
-  # Cleanup the temporary directory
-  rm -rf "$tmpdir"
-fi
-
-path+=("$HOME/.local/bin:$PATH")
-
-# Install tmux packge manage if its not installed
-if [ ! -d "$HOME/.tmux/plugins/tpm" ]; then
-  echo "TPM is not found. Installing..."
-
-  # Clone TPM repository
-  git clone https://github.com/tmux-plugins/tpm.git ~/.tmux/plugins/tpm
-
-  echo "TPM installation complete."
-fi
-
-
-export PATH
-
+. /home/linuxbrew/.linuxbrew/opt/asdf/libexec/asdf.sh
