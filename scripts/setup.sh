@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # =============================================================================
 # WSL2 Ubuntu 24.04 LTS - Dev Environment Setup
-# Installs: Python, Bun, Node.js (nvm), Claude Code, Neovim, tmux (latest),
-#           lazygit (latest), gh CLI, zsh, Oh My Zsh, Powerlevel10k,
-#           zsh-syntax-highlighting, zsh-autosuggestions
+# Installs: Python, Bun, Node.js (nvm), Claude Code, pnpm,
+#           Lua, Rust, Neovim + providers (node/python/perl/ruby) + win32yank,
+#           tmux (latest), lazygit (latest), gh CLI, zsh, Oh My Zsh,
+#           Powerlevel10k, zsh-syntax-highlighting, zsh-autosuggestions
 # Dotfiles: https://github.com/QuentinGibson/dotfiles
 # =============================================================================
 
@@ -57,7 +58,10 @@ sudo apt-get install -y \
   build-essential autoconf automake pkg-config \
   libevent-dev libncurses-dev bison byacc \
   zsh stow fontconfig \
-  python3 python3-venv python3-dev python3-full pipx \
+  python3 python3-venv python3-dev python3-full pipx python3-pynvim \
+  lua5.4 luarocks \
+  perl cpanminus libterm-readline-gnu-perl \
+  ruby ruby-dev \
   ripgrep fd-find fzf \
   xclip xsel \
   ca-certificates gnupg lsb-release
@@ -214,7 +218,28 @@ else
 fi
 
 # =============================================================================
-# 5. Neovim (latest stable via PPA)
+# 7. Rust (via rustup)
+# =============================================================================
+section "Installing Rust"
+
+if command -v rustc &>/dev/null; then
+  warn "Rust already installed: $(rustc --version) — updating"
+  rustup update stable
+else
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+    | sh -s -- -y --no-modify-path
+  log "Rust installed"
+fi
+
+# Load cargo env for the rest of this script
+source "$HOME/.cargo/env" 2>/dev/null || export PATH="$HOME/.cargo/bin:$PATH"
+log "Rust $(rustc --version) ready"
+
+# Persist cargo PATH in .zshrc
+ensure_line "$HOME/.zshrc" '. "$HOME/.cargo/env"'
+
+# =============================================================================
+# 8. Neovim (latest stable via PPA)
 # =============================================================================
 section "Installing Neovim"
 
@@ -469,7 +494,68 @@ else
 fi
 
 # =============================================================================
-# 12. Neovim plugin bootstrap (lazy.nvim)
+# 12. Neovim WSL2 clipboard — win32yank
+# WSL2 has no X server, so xclip/xsel don't work. win32yank bridges to the
+# Windows clipboard via /mnt/c and is auto-detected by Neovim's clipboard=unnamedplus.
+# =============================================================================
+section "Installing win32yank (Neovim WSL2 clipboard)"
+
+WIN32YANK_PATH="/usr/local/bin/win32yank.exe"
+
+if [ -f "$WIN32YANK_PATH" ]; then
+  warn "win32yank already installed — skipping"
+else
+  WIN32YANK_VERSION=$(latest_github_release "equalsraf/win32yank")
+  WIN32YANK_VERSION_CLEAN="${WIN32YANK_VERSION#v}"
+  WIN32YANK_URL="https://github.com/equalsraf/win32yank/releases/download/${WIN32YANK_VERSION}/win32yank-x64.zip"
+
+  log "Downloading win32yank $WIN32YANK_VERSION_CLEAN..."
+  curl -fsSL "$WIN32YANK_URL" -o "$TMPDIR_BUILD/win32yank.zip"
+  unzip -q "$TMPDIR_BUILD/win32yank.zip" -d "$TMPDIR_BUILD/win32yank"
+  sudo install -m 0755 "$TMPDIR_BUILD/win32yank/win32yank.exe" "$WIN32YANK_PATH"
+  log "win32yank installed at $WIN32YANK_PATH"
+fi
+
+# Ensure clipboard=unnamedplus is set in Neovim config
+NVIM_OPTS="$HOME/.config/nvim/lua/config/options.lua"
+if [ -f "$NVIM_OPTS" ]; then
+  grep -q 'clipboard' "$NVIM_OPTS" \
+    || echo 'vim.opt.clipboard = "unnamedplus"' >> "$NVIM_OPTS"
+  log "clipboard=unnamedplus set in $NVIM_OPTS"
+else
+  warn "Could not find $NVIM_OPTS — add 'vim.opt.clipboard = \"unnamedplus\"' to your Neovim config manually"
+fi
+
+# =============================================================================
+# 13. Neovim language providers
+# These allow :checkhealth to show green for all major language integrations.
+# =============================================================================
+section "Installing Neovim language providers"
+
+# ── Node.js provider ─────────────────────────────────────────────────────────
+log "Installing neovim npm package (Node provider)..."
+npm install -g neovim
+log "Node provider ready"
+
+# ── Python provider ───────────────────────────────────────────────────────────
+# python3-pynvim was installed via apt above (avoids PEP 668 issues)
+log "Python provider (pynvim): installed via apt"
+
+# ── Perl provider ─────────────────────────────────────────────────────────────
+log "Installing Neovim::Ext (Perl provider)..."
+cpanm -n Neovim::Ext 2>/dev/null || warn "Perl provider install had warnings — run 'cpanm Neovim::Ext' manually"
+log "Perl provider ready"
+
+# ── Ruby provider ─────────────────────────────────────────────────────────────
+log "Installing neovim gem (Ruby provider)..."
+sudo gem install neovim --quiet
+log "Ruby provider ready"
+
+# ── Lua (luarocks for nvim plugins that need it) ──────────────────────────────
+log "Lua $(lua5.4 -v 2>&1 | head -1) + luarocks $(luarocks --version | head -1) ready"
+
+# =============================================================================
+# 14. Neovim plugin bootstrap (lazy.nvim)
 # =============================================================================
 section "Bootstrapping Neovim plugins"
 
@@ -528,7 +614,10 @@ echo "    node        $(node --version 2>/dev/null || echo 'restart shell to ver
 echo "    pnpm        $(pnpm --version 2>/dev/null || echo 'restart shell to verify')"
 echo "    claude      $(claude --version 2>/dev/null || echo 'restart shell to verify')"
 echo "    gh          $(gh --version 2>&1 | head -1)"
+echo "    rust        $(rustc --version 2>/dev/null || echo 'restart shell to verify')"
+echo "    lua         $(lua5.4 -v 2>&1)"
 echo "    nvim        $(nvim --version 2>&1 | head -1)"
+echo "    nvim providers: node, python (pynvim), perl, ruby"
 echo "    tmux        $(tmux -V 2>&1)"
 echo "    lazygit     $(lazygit --version 2>&1 | grep -oP 'version=\K[^,]+' || echo 'installed')"
 echo "    oh-my-zsh   $OMZ_DIR"
