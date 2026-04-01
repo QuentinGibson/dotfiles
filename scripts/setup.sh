@@ -62,6 +62,8 @@ sudo apt-get install -y \
   lua5.4 luarocks \
   perl cpanminus libterm-readline-gnu-perl \
   ruby ruby-dev \
+  php8.2 php8.2-cli php8.2-mbstring php8.2-xml php8.2-curl php8.2-zip php8.2-xdebug \
+  openjdk-17-jdk \
   ripgrep fd-find fzf \
   xclip xsel \
   ca-certificates gnupg lsb-release
@@ -254,6 +256,27 @@ fi
 log "Neovim $(nvim --version | head -1) ready"
 
 # =============================================================================
+# Composer (PHP package manager — required by phpactor build step)
+# =============================================================================
+section "Installing Composer"
+
+if command -v composer &>/dev/null; then
+  warn "Composer already installed: $(composer --version | head -1) — updating"
+  composer self-update
+else
+  EXPECTED_CHECKSUM="$(php -r 'copy("https://composer.github.io/installer.sig", "php://stdout");')"
+  php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+  ACTUAL_CHECKSUM="$(php -r "echo hash_file('sha384', 'composer-setup.php');")"
+  if [ "$EXPECTED_CHECKSUM" != "$ACTUAL_CHECKSUM" ]; then
+    error "Composer installer checksum mismatch — aborting"
+  fi
+  php composer-setup.php --quiet
+  rm -f composer-setup.php
+  sudo mv composer.phar /usr/local/bin/composer
+  log "Composer $(composer --version | head -1) installed"
+fi
+
+# =============================================================================
 # 6. tmux — latest release built from source
 # =============================================================================
 section "Installing tmux (latest from source)"
@@ -341,7 +364,7 @@ fi
 section "Symlinking configs with GNU Stow"
 cd "$DOTFILES_DIR"
 
-for dir in git nvim tmux zshrc; do
+for dir in git tmux zshrc; do
   if [ -d "$DOTFILES_DIR/$dir" ]; then
     log "Stowing: $dir"
     # --adopt pulls any pre-existing home files into the repo, then we restore
@@ -537,6 +560,11 @@ log "Installing neovim npm package (Node provider)..."
 npm install -g neovim
 log "Node provider ready"
 
+# ── tree-sitter CLI (required to build certain treesitter parsers) ────────────
+log "Installing tree-sitter-cli (required by nvim-treesitter parser builds)..."
+npm install -g tree-sitter-cli
+log "tree-sitter-cli ready"
+
 # ── Python provider ───────────────────────────────────────────────────────────
 # python3-pynvim was installed via apt above (avoids PEP 668 issues)
 log "Python provider (pynvim): installed via apt"
@@ -551,8 +579,30 @@ log "Installing neovim gem (Ruby provider)..."
 sudo gem install neovim --quiet
 log "Ruby provider ready"
 
+# ── neovim-remote (nvr — required by lazygit.nvim neovim_remote integration) ──
+log "Installing neovim-remote (nvr)..."
+pipx install neovim-remote 2>/dev/null || pipx upgrade neovim-remote || true
+log "neovim-remote ready"
+
 # ── Lua (luarocks for nvim plugins that need it) ──────────────────────────────
 log "Lua $(lua5.4 -v 2>&1 | head -1) + luarocks $(luarocks --version | head -1) ready"
+
+# =============================================================================
+# Neovim config — QuentinGibson/kickstart.nvim
+# =============================================================================
+section "Installing Neovim config (kickstart.nvim)"
+
+NVIM_CONFIG_REPO="https://github.com/QuentinGibson/kickstart.nvim"
+NVIM_CONFIG_DIR="$HOME/.config/nvim"
+
+if [ -d "$NVIM_CONFIG_DIR/.git" ]; then
+  warn "Neovim config already cloned — pulling latest"
+  git -C "$NVIM_CONFIG_DIR" pull --ff-only
+else
+  mkdir -p "$HOME/.config"
+  git clone "$NVIM_CONFIG_REPO" "$NVIM_CONFIG_DIR"
+  log "Neovim config cloned to $NVIM_CONFIG_DIR"
+fi
 
 # =============================================================================
 # 14. Neovim plugin bootstrap (lazy.nvim)
@@ -617,7 +667,11 @@ echo "    gh          $(gh --version 2>&1 | head -1)"
 echo "    rust        $(rustc --version 2>/dev/null || echo 'restart shell to verify')"
 echo "    lua         $(lua5.4 -v 2>&1)"
 echo "    nvim        $(nvim --version 2>&1 | head -1)"
-echo "    nvim providers: node, python (pynvim), perl, ruby"
+echo "    nvim config  QuentinGibson/kickstart.nvim → ~/.config/nvim"
+echo "    nvim providers: node, python (pynvim), perl, ruby, tree-sitter-cli, neovim-remote
+    php         $(php --version 2>&1 | head -1)
+    composer    $(composer --version 2>/dev/null | head -1 || echo 'restart shell to verify')
+    java        $(java -version 2>&1 | head -1)"
 echo "    tmux        $(tmux -V 2>&1)"
 echo "    lazygit     $(lazygit --version 2>&1 | grep -oP 'version=\K[^,]+' || echo 'installed')"
 echo "    oh-my-zsh   $OMZ_DIR"
