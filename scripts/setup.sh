@@ -88,30 +88,33 @@ echo ""
 # =============================================================================
 step "system packages — the boring-but-necessary stuff"
 
-_apt_needed=false
-for _p in git build-essential zsh python3 lua5.4 perl ruby openjdk-17-jdk ripgrep stow; do
-  dpkg -s "$_p" &>/dev/null || { _apt_needed=true; break; }
+_base_pkgs=(
+  git curl wget unzip tar
+  build-essential autoconf automake pkg-config
+  libevent-dev libncurses-dev bison byacc
+  zsh stow fontconfig
+  python3 python3-venv python3-dev python3-full pipx python3-pynvim
+  lua5.4 luarocks
+  perl cpanminus libterm-readline-gnu-perl
+  ruby ruby-dev
+  openjdk-17-jdk
+  ripgrep fd-find fzf
+  xclip xsel
+  ca-certificates gnupg lsb-release software-properties-common
+)
+
+_missing=()
+for _p in "${_base_pkgs[@]}"; do
+  dpkg -s "$_p" &>/dev/null || _missing+=("$_p")
 done
 
-if [ "$_apt_needed" = "true" ]; then
+if [ ${#_missing[@]} -gt 0 ]; then
+  ok "installing ${#_missing[@]} missing package(s): ${_missing[*]}"
   sudo apt-get update -qq >> "$LOG_FILE" 2>&1
-  sudo apt-get install -y \
-    git curl wget unzip tar \
-    build-essential autoconf automake pkg-config \
-    libevent-dev libncurses-dev bison byacc \
-    zsh stow fontconfig \
-    python3 python3-venv python3-dev python3-full pipx python3-pynvim \
-    lua5.4 luarocks \
-    perl cpanminus libterm-readline-gnu-perl \
-    ruby ruby-dev \
-    openjdk-17-jdk \
-    ripgrep fd-find fzf \
-    xclip xsel \
-    ca-certificates gnupg lsb-release software-properties-common \
-    >> "$LOG_FILE" 2>&1
-  ok "base packages installed"
+  sudo apt-get install -y "${_missing[@]}" >> "$LOG_FILE" 2>&1
+  ok "base packages ready"
 else
-  skip "base packages"
+  skip "all base packages"
 fi
 
 # =============================================================================
@@ -119,15 +122,21 @@ fi
 # =============================================================================
 step "PHP 8.2 — for the Laravel enjoyers in the room 🐘"
 
-if command -v php &>/dev/null; then
-  skip "PHP $(php --version | head -1 | cut -d' ' -f1-2)"
-else
+_php_pkgs=(php8.2 php8.2-cli php8.2-mbstring php8.2-xml php8.2-curl php8.2-zip php8.2-xdebug)
+
+_missing=()
+for _p in "${_php_pkgs[@]}"; do
+  dpkg -s "$_p" &>/dev/null || _missing+=("$_p")
+done
+
+if [ ${#_missing[@]} -gt 0 ]; then
+  ok "installing ${#_missing[@]} missing PHP package(s): ${_missing[*]}"
   sudo add-apt-repository -y ppa:ondrej/php >> "$LOG_FILE" 2>&1
   sudo apt-get update -qq >> "$LOG_FILE" 2>&1
-  sudo apt-get install -y \
-    php8.2 php8.2-cli php8.2-mbstring php8.2-xml php8.2-curl php8.2-zip php8.2-xdebug \
-    >> "$LOG_FILE" 2>&1
-  ok "PHP $(php --version | head -1 | cut -d' ' -f1-2) ready"
+  sudo apt-get install -y "${_missing[@]}" >> "$LOG_FILE" 2>&1
+  ok "PHP $(php --version | head -1 | awk '{print $2}') ready"
+else
+  skip "PHP $(php --version | head -1 | awk '{print $2}') — all packages present"
 fi
 
 # =============================================================================
