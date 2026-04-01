@@ -2,9 +2,9 @@
 # =============================================================================
 # WSL2 Ubuntu 24.04 LTS - Dev Environment Setup
 # Installs: Python, Bun, Node.js (nvm), Claude Code, pnpm,
-#           Lua, Rust, Neovim + providers (node/python/perl/ruby) + win32yank,
-#           tmux (latest), lazygit (latest), gh CLI, zsh, Oh My Zsh,
-#           Powerlevel10k, zsh-syntax-highlighting, zsh-autosuggestions
+#           Lua, Rust, Neovim + providers + kickstart config,
+#           PHP 8.2, Java 17, Composer, tmux, lazygit, gh CLI,
+#           zsh, Oh My Zsh, Powerlevel10k
 # Dotfiles: https://github.com/QuentinGibson/dotfiles
 # =============================================================================
 
@@ -13,25 +13,25 @@ set -euo pipefail
 DOTFILES_REPO="https://github.com/QuentinGibson/dotfiles.git"
 DOTFILES_DIR="$HOME/dotfiles"
 TMPDIR_BUILD="$(mktemp -d)"
+LOG_FILE="/tmp/devsetup-$(date +%s).log"
+TOTAL_STEPS=23
+CURRENT_STEP=0
 
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
 NC='\033[0m'
-
-log()    { echo -e "${GREEN}[+]${NC} $1"; }
-warn()   { echo -e "${YELLOW}[!]${NC} $1"; }
-error()  { echo -e "${RED}[x]${NC} $1"; exit 1; }
-section(){ echo -e "\n${BLUE}==> $1${NC}"; }
 
 cleanup() { rm -rf "$TMPDIR_BUILD"; }
 trap cleanup EXIT
 
 # Helper: fetch latest GitHub release tag for a repo (owner/repo)
 latest_github_release() {
-  curl -fsSL "https://api.github.com/repos/$1/releases/latest" \
+  curl -fsSL "https://api.github.com/repos/$1/releases/latest" 2>>"$LOG_FILE" \
     | grep '"tag_name"' \
     | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/'
 }
@@ -48,238 +48,279 @@ ensure_pattern() {
   grep -q "$pattern" "$file" 2>/dev/null || echo "$line" >> "$file"
 }
 
-# =============================================================================
-# 1. System update + base dependencies
-# =============================================================================
-section "Updating system packages"
-sudo apt-get update -qq
-sudo apt-get install -y \
-  git curl wget unzip tar \
-  build-essential autoconf automake pkg-config \
-  libevent-dev libncurses-dev bison byacc \
-  zsh stow fontconfig \
-  python3 python3-venv python3-dev python3-full pipx python3-pynvim \
-  lua5.4 luarocks \
-  perl cpanminus libterm-readline-gnu-perl \
-  ruby ruby-dev \
-  php8.2 php8.2-cli php8.2-mbstring php8.2-xml php8.2-curl php8.2-zip php8.2-xdebug \
-  openjdk-17-jdk \
-  ripgrep fd-find fzf \
-  xclip xsel \
-  ca-certificates gnupg lsb-release
+# ── Output helpers ─────────────────────────────────────────────────────────────
 
-log "System packages installed"
+_bar() {
+  local filled=$(( 28 * CURRENT_STEP / TOTAL_STEPS ))
+  local empty=$(( 28 - filled ))
+  local b=""
+  for ((i=0; i<filled; i++)); do b+="${GREEN}█${NC}"; done
+  for ((i=0; i<empty; i++)); do b+="${BLUE}░${NC}"; done
+  printf "  ${BLUE}[${NC}%b${BLUE}]${NC}  ${BOLD}%3d%%${NC}  ${BLUE}%d / %d${NC}\n" \
+    "$b" "$(( 100 * CURRENT_STEP / TOTAL_STEPS ))" "$CURRENT_STEP" "$TOTAL_STEPS"
+}
+
+step() {
+  CURRENT_STEP=$(( CURRENT_STEP + 1 ))
+  echo ""
+  _bar
+  echo -e "  ${CYAN}▸${NC}  $1"
+}
+
+ok()   { echo -e "  ${GREEN}✓${NC}  $1"; }
+skip() { echo -e "  ${YELLOW}↩${NC}  $1  ${BLUE}(already installed)${NC}"; }
+warn() { echo -e "  ${YELLOW}!${NC}  $1"; }
+fail() { echo -e "  ${RED}✗${NC}  $1"; exit 1; }
+
+# ── Header ─────────────────────────────────────────────────────────────────────
+
+echo ""
+echo -e "${BOLD}${BLUE}  ╭──────────────────────────────────────────────────╮${NC}"
+echo -e "${BOLD}${BLUE}  │${NC}  🚀  dev environment setup · WSL2 Ubuntu 24.04  ${BOLD}${BLUE}│${NC}"
+echo -e "${BOLD}${BLUE}  ╰──────────────────────────────────────────────────╯${NC}"
+echo ""
+echo -e "  ${BLUE}logs →${NC} $LOG_FILE"
+echo -e "  grab a coffee. this'll take a few minutes ☕"
+echo ""
 
 # =============================================================================
-# 2. Python setup
+# 1. System packages
 # =============================================================================
-section "Setting up Python"
+step "system packages — the boring-but-necessary stuff"
 
-if ! command -v python &>/dev/null; then
-  sudo apt-get install -y python-is-python3
+_apt_needed=false
+for _p in git build-essential zsh python3 lua5.4 perl ruby openjdk-17-jdk ripgrep stow; do
+  dpkg -s "$_p" &>/dev/null || { _apt_needed=true; break; }
+done
+
+if [ "$_apt_needed" = "true" ]; then
+  sudo apt-get update -qq >> "$LOG_FILE" 2>&1
+  sudo apt-get install -y \
+    git curl wget unzip tar \
+    build-essential autoconf automake pkg-config \
+    libevent-dev libncurses-dev bison byacc \
+    zsh stow fontconfig \
+    python3 python3-venv python3-dev python3-full pipx python3-pynvim \
+    lua5.4 luarocks \
+    perl cpanminus libterm-readline-gnu-perl \
+    ruby ruby-dev \
+    openjdk-17-jdk \
+    ripgrep fd-find fzf \
+    xclip xsel \
+    ca-certificates gnupg lsb-release software-properties-common \
+    >> "$LOG_FILE" 2>&1
+  ok "base packages installed"
+else
+  skip "base packages"
 fi
 
-# pipx is installed via apt above — ensure its bin dir is on PATH now
-export PATH="$HOME/.local/bin:$PATH"
-pipx ensurepath --force
+# =============================================================================
+# 2. PHP 8.2
+# =============================================================================
+step "PHP 8.2 — for the Laravel enjoyers in the room 🐘"
 
-# Install global Python CLI tools via pipx (each gets its own isolated venv)
+if command -v php &>/dev/null; then
+  skip "PHP $(php --version | head -1 | cut -d' ' -f1-2)"
+else
+  sudo add-apt-repository -y ppa:ondrej/php >> "$LOG_FILE" 2>&1
+  sudo apt-get update -qq >> "$LOG_FILE" 2>&1
+  sudo apt-get install -y \
+    php8.2 php8.2-cli php8.2-mbstring php8.2-xml php8.2-curl php8.2-zip php8.2-xdebug \
+    >> "$LOG_FILE" 2>&1
+  ok "PHP $(php --version | head -1 | cut -d' ' -f1-2) ready"
+fi
+
+# =============================================================================
+# 3. Python
+# =============================================================================
+step "Python — everybody's favourite scripting snake 🐍"
+
+export PATH="$HOME/.local/bin:$PATH"
+
+if ! command -v python &>/dev/null; then
+  sudo apt-get install -y python-is-python3 >> "$LOG_FILE" 2>&1
+fi
+
+pipx ensurepath --force >> "$LOG_FILE" 2>&1
+
 for tool in black ruff mypy ipython; do
   if pipx list 2>/dev/null | grep -q "$tool"; then
-    warn "$tool already installed via pipx — upgrading"
-    pipx upgrade "$tool" || true
+    pipx upgrade "$tool" >> "$LOG_FILE" 2>&1 || true
   else
-    pipx install "$tool"
-    log "$tool installed via pipx"
+    pipx install "$tool" >> "$LOG_FILE" 2>&1
   fi
 done
 
-log "Python $(python3 --version) ready"
+ok "Python $(python3 --version) + black, ruff, mypy, ipython"
 
 # =============================================================================
-# 3. Bun (JavaScript runtime + package manager)
+# 4. Bun
 # =============================================================================
-section "Installing Bun"
+step "Bun — JavaScript runtime speedrun 🧅"
 
 if command -v bun &>/dev/null; then
-  warn "Bun already installed: $(bun --version) — upgrading"
-  bun upgrade
+  skip "Bun $(bun --version)"
+  bun upgrade >> "$LOG_FILE" 2>&1
 else
-  curl -fsSL https://bun.sh/install | bash
+  curl -fsSL https://bun.sh/install 2>>"$LOG_FILE" | bash >> "$LOG_FILE" 2>&1
   export BUN_INSTALL="$HOME/.bun"
   export PATH="$BUN_INSTALL/bin:$PATH"
+  ok "Bun $(bun --version 2>/dev/null || echo 'installed') ready"
 fi
 
-log "Bun $(bun --version 2>/dev/null || echo 'installed') ready"
-
 # =============================================================================
-# 4. Node.js via nvm (required for Claude Code + pnpm)
+# 5. Node.js via nvm
 # =============================================================================
-section "Installing Node.js via nvm"
+step "Node.js — JavaScript, but make it a server 🟢"
 
 export NVM_DIR="$HOME/.nvm"
 
 if [ -d "$NVM_DIR" ]; then
-  warn "nvm already installed — updating"
+  skip "nvm — updating to latest"
   (
     cd "$NVM_DIR"
-    git fetch --tags --quiet
+    git fetch --tags --quiet >> "$LOG_FILE" 2>&1
     LATEST_NVM=$(git describe --abbrev=0 --tags)
-    git checkout "$LATEST_NVM" --quiet
+    git checkout "$LATEST_NVM" --quiet >> "$LOG_FILE" 2>&1
   )
 else
   NVM_VERSION=$(latest_github_release "nvm-sh/nvm")
-  curl -fsSL "https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_VERSION}/install.sh" | bash
-  log "nvm $NVM_VERSION installed"
+  curl -fsSL "https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_VERSION}/install.sh" \
+    2>>"$LOG_FILE" | bash >> "$LOG_FILE" 2>&1
 fi
 
-# Load nvm as a shell function (nvm is NOT a binary — type/source required)
-export NVM_DIR="$HOME/.nvm"
 \. "$NVM_DIR/nvm.sh"
-
-# Install latest LTS and set as default
-nvm install --lts
-nvm use --lts
-nvm alias default 'lts/*'
-
-# Put the active node on PATH for the rest of this script
+nvm install --lts >> "$LOG_FILE" 2>&1
+nvm use --lts >> "$LOG_FILE" 2>&1
+nvm alias default 'lts/*' >> "$LOG_FILE" 2>&1
 export PATH="$(nvm which current | xargs dirname):$PATH"
-
-log "Node.js $(node --version) / npm $(npm --version) ready"
 
 # Persist nvm in .zshrc
 NVM_LINES='export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"'
-grep -qF 'NVM_DIR' "$HOME/.zshrc" 2>/dev/null \
-  || echo "$NVM_LINES" >> "$HOME/.zshrc"
+grep -qF 'NVM_DIR' "$HOME/.zshrc" 2>/dev/null || echo "$NVM_LINES" >> "$HOME/.zshrc"
+
+ok "Node.js $(node --version) / npm $(npm --version)"
 
 # =============================================================================
-# 5. pnpm
+# 6. pnpm
 # =============================================================================
-section "Installing pnpm"
+step "pnpm — the superior package manager (fight me) 📦"
 
 if command -v pnpm &>/dev/null; then
-  warn "pnpm already installed: $(pnpm --version) — updating"
-  npm update -g pnpm
+  skip "pnpm $(pnpm --version)"
+  npm update -g pnpm >> "$LOG_FILE" 2>&1
 else
-  npm install -g pnpm
-  log "pnpm $(pnpm --version) installed"
+  npm install -g pnpm >> "$LOG_FILE" 2>&1
 fi
 
-# Configure pnpm global store and add to PATH
 export PNPM_HOME="$HOME/.local/share/pnpm"
 export PATH="$PNPM_HOME:$PATH"
-pnpm setup --force 2>/dev/null || true
+pnpm setup --force >> "$LOG_FILE" 2>&1 || true
 
-# Persist pnpm PATH in .zshrc
 PNPM_LINES='export PNPM_HOME="$HOME/.local/share/pnpm"
 export PATH="$PNPM_HOME:$PATH"'
-grep -qF 'PNPM_HOME' "$HOME/.zshrc" 2>/dev/null \
-  || echo "$PNPM_LINES" >> "$HOME/.zshrc"
+grep -qF 'PNPM_HOME' "$HOME/.zshrc" 2>/dev/null || echo "$PNPM_LINES" >> "$HOME/.zshrc"
+
+ok "pnpm $(pnpm --version) ready"
 
 # =============================================================================
-# 6. Claude Code
+# 7. Claude Code
 # =============================================================================
-section "Installing Claude Code"
+step "Claude Code — installing your AI pair programmer 🤖"
 
 if command -v claude &>/dev/null; then
-  warn "Claude Code already installed — updating"
-  npm update -g @anthropic-ai/claude-code
+  skip "Claude Code"
+  npm update -g @anthropic-ai/claude-code >> "$LOG_FILE" 2>&1
 else
-  npm install -g @anthropic-ai/claude-code
-  log "Claude Code installed"
+  npm install -g @anthropic-ai/claude-code >> "$LOG_FILE" 2>&1
 fi
 
-# Verify claude is reachable on PATH
 if ! command -v claude &>/dev/null; then
-  # npm global bin may not be on PATH yet — find and add it
   NPM_GLOBAL_BIN="$(npm root -g)/../bin"
   export PATH="$NPM_GLOBAL_BIN:$PATH"
 fi
 
-log "Claude Code $(claude --version 2>/dev/null || echo 'installed — restart shell to verify') ready"
+ok "Claude Code $(claude --version 2>/dev/null || echo 'installed — restart shell to verify')"
 
 # =============================================================================
-# 6. GitHub CLI (gh)
+# 8. GitHub CLI
 # =============================================================================
-section "Installing GitHub CLI"
+step "GitHub CLI — pushing to main at 3am, we see you 🐙"
 
 if command -v gh &>/dev/null; then
-  warn "gh already installed: $(gh --version | head -1) — skipping"
+  skip "gh $(gh --version | head -1)"
 else
   curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-    | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+    2>>"$LOG_FILE" \
+    | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg >> "$LOG_FILE" 2>&1
   sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] \
     https://cli.github.com/packages stable main" \
-    | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-  sudo apt-get update -qq
-  sudo apt-get install -y gh
-  log "gh $(gh --version | head -1) installed"
+    | sudo tee /etc/apt/sources.list.d/github-cli.list >> "$LOG_FILE" 2>&1
+  sudo apt-get update -qq >> "$LOG_FILE" 2>&1
+  sudo apt-get install -y gh >> "$LOG_FILE" 2>&1
+  ok "gh $(gh --version | head -1)"
 fi
 
 # =============================================================================
-# 7. Rust (via rustup)
+# 9. Rust
 # =============================================================================
-section "Installing Rust"
+step "Rust — compiling. this is fine. we're all fine. 🦀"
 
 if command -v rustc &>/dev/null; then
-  warn "Rust already installed: $(rustc --version) — updating"
-  rustup update stable
+  skip "Rust $(rustc --version)"
+  rustup update stable >> "$LOG_FILE" 2>&1
 else
-  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-    | sh -s -- -y --no-modify-path
-  log "Rust installed"
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs 2>>"$LOG_FILE" \
+    | sh -s -- -y --no-modify-path >> "$LOG_FILE" 2>&1
 fi
 
-# Load cargo env for the rest of this script
 source "$HOME/.cargo/env" 2>/dev/null || export PATH="$HOME/.cargo/bin:$PATH"
-log "Rust $(rustc --version) ready"
-
-# Persist cargo PATH in .zshrc
 ensure_line "$HOME/.zshrc" '. "$HOME/.cargo/env"'
 
+ok "Rust $(rustc --version) ready"
+
 # =============================================================================
-# 8. Neovim (latest stable via PPA)
+# 10. Neovim
 # =============================================================================
-section "Installing Neovim"
+step "Neovim — vim, but it actually slaps ✨"
 
 if command -v nvim &>/dev/null; then
-  warn "Neovim already installed: $(nvim --version | head -1)"
+  skip "Neovim $(nvim --version | head -1)"
 else
-  sudo add-apt-repository -y ppa:neovim-ppa/unstable
-  sudo apt-get update -qq
-  sudo apt-get install -y neovim
+  sudo add-apt-repository -y ppa:neovim-ppa/unstable >> "$LOG_FILE" 2>&1
+  sudo apt-get update -qq >> "$LOG_FILE" 2>&1
+  sudo apt-get install -y neovim >> "$LOG_FILE" 2>&1
+  ok "Neovim $(nvim --version | head -1) ready"
 fi
 
-log "Neovim $(nvim --version | head -1) ready"
-
 # =============================================================================
-# Composer (PHP package manager — required by phpactor build step)
+# 11. Composer
 # =============================================================================
-section "Installing Composer"
+step "Composer — PHP's package manager (therapy not included) 🎼"
 
 if command -v composer &>/dev/null; then
-  warn "Composer already installed: $(composer --version | head -1) — updating"
-  composer self-update
+  skip "Composer $(composer --version | head -1)"
+  composer self-update >> "$LOG_FILE" 2>&1
 else
   EXPECTED_CHECKSUM="$(php -r 'copy("https://composer.github.io/installer.sig", "php://stdout");')"
-  php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+  php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');" >> "$LOG_FILE" 2>&1
   ACTUAL_CHECKSUM="$(php -r "echo hash_file('sha384', 'composer-setup.php');")"
   if [ "$EXPECTED_CHECKSUM" != "$ACTUAL_CHECKSUM" ]; then
-    error "Composer installer checksum mismatch — aborting"
+    fail "Composer installer checksum mismatch — aborting"
   fi
-  php composer-setup.php --quiet
+  php composer-setup.php --quiet >> "$LOG_FILE" 2>&1
   rm -f composer-setup.php
   sudo mv composer.phar /usr/local/bin/composer
-  log "Composer $(composer --version | head -1) installed"
+  ok "Composer $(composer --version | head -1) installed"
 fi
 
 # =============================================================================
-# 6. tmux — latest release built from source
+# 12. tmux
 # =============================================================================
-section "Installing tmux (latest from source)"
+step "tmux — windows within windows within windows 🪟"
 
 TMUX_VERSION=$(latest_github_release "tmux/tmux")
 TMUX_VERSION_CLEAN="${TMUX_VERSION#v}"
@@ -288,9 +329,9 @@ _build_tmux=false
 if command -v tmux &>/dev/null; then
   INSTALLED_TMUX=$(tmux -V | awk '{print $2}')
   if [ "$INSTALLED_TMUX" = "$TMUX_VERSION_CLEAN" ]; then
-    warn "tmux $INSTALLED_TMUX already up-to-date — skipping build"
+    skip "tmux $INSTALLED_TMUX"
   else
-    warn "tmux $INSTALLED_TMUX installed; building latest ($TMUX_VERSION_CLEAN)..."
+    warn "tmux $INSTALLED_TMUX → upgrading to $TMUX_VERSION_CLEAN"
     _build_tmux=true
   fi
 else
@@ -300,21 +341,20 @@ fi
 if [ "$_build_tmux" = "true" ]; then
   TMUX_TAR="tmux-${TMUX_VERSION_CLEAN}.tar.gz"
   TMUX_URL="https://github.com/tmux/tmux/releases/download/${TMUX_VERSION}/${TMUX_TAR}"
-  log "Downloading tmux $TMUX_VERSION_CLEAN..."
-  curl -fsSL "$TMUX_URL" -o "$TMPDIR_BUILD/$TMUX_TAR"
-  tar -xzf "$TMPDIR_BUILD/$TMUX_TAR" -C "$TMPDIR_BUILD"
+  curl -fsSL "$TMUX_URL" -o "$TMPDIR_BUILD/$TMUX_TAR" >> "$LOG_FILE" 2>&1
+  tar -xzf "$TMPDIR_BUILD/$TMUX_TAR" -C "$TMPDIR_BUILD" >> "$LOG_FILE" 2>&1
   pushd "$TMPDIR_BUILD/tmux-${TMUX_VERSION_CLEAN}" > /dev/null
-    ./configure --prefix=/usr/local
-    make -j"$(nproc)"
-    sudo make install
+    ./configure --prefix=/usr/local >> "$LOG_FILE" 2>&1
+    make -j"$(nproc)" >> "$LOG_FILE" 2>&1
+    sudo make install >> "$LOG_FILE" 2>&1
   popd > /dev/null
-  log "tmux $(tmux -V) installed from source"
+  ok "tmux $(tmux -V) built from source"
 fi
 
 # =============================================================================
-# 7. lazygit — latest release binary
+# 13. lazygit
 # =============================================================================
-section "Installing lazygit (latest)"
+step "lazygit — git, but for people with a life 😌"
 
 LAZYGIT_VERSION=$(latest_github_release "jesseduffield/lazygit")
 LAZYGIT_VERSION_CLEAN="${LAZYGIT_VERSION#v}"
@@ -323,10 +363,10 @@ _install_lazygit=true
 if command -v lazygit &>/dev/null; then
   INSTALLED_LG=$(lazygit --version | grep -oP 'version=\K[^,]+')
   if [ "$INSTALLED_LG" = "$LAZYGIT_VERSION_CLEAN" ]; then
-    warn "lazygit $INSTALLED_LG already up-to-date — skipping"
+    skip "lazygit $INSTALLED_LG"
     _install_lazygit=false
   else
-    warn "lazygit $INSTALLED_LG installed; upgrading to $LAZYGIT_VERSION_CLEAN..."
+    warn "lazygit $INSTALLED_LG → upgrading to $LAZYGIT_VERSION_CLEAN"
   fi
 fi
 
@@ -335,164 +375,127 @@ if [ "$_install_lazygit" = "true" ]; then
   case "$ARCH" in
     x86_64)  ARCH_LABEL="x86_64" ;;
     aarch64) ARCH_LABEL="arm64"  ;;
-    *)       error "Unsupported architecture: $ARCH" ;;
+    *)       fail "unsupported architecture: $ARCH" ;;
   esac
   LG_TAR="lazygit_${LAZYGIT_VERSION_CLEAN}_Linux_${ARCH_LABEL}.tar.gz"
   LG_URL="https://github.com/jesseduffield/lazygit/releases/download/${LAZYGIT_VERSION}/${LG_TAR}"
-  log "Downloading lazygit $LAZYGIT_VERSION_CLEAN..."
-  curl -fsSL "$LG_URL" -o "$TMPDIR_BUILD/$LG_TAR"
-  tar -xzf "$TMPDIR_BUILD/$LG_TAR" -C "$TMPDIR_BUILD"
+  curl -fsSL "$LG_URL" -o "$TMPDIR_BUILD/$LG_TAR" >> "$LOG_FILE" 2>&1
+  tar -xzf "$TMPDIR_BUILD/$LG_TAR" -C "$TMPDIR_BUILD" >> "$LOG_FILE" 2>&1
   sudo install -m 0755 "$TMPDIR_BUILD/lazygit" /usr/local/bin/lazygit
-  log "lazygit $(lazygit --version | grep -oP 'version=\K[^,]+') installed"
+  ok "lazygit $(lazygit --version | grep -oP 'version=\K[^,]+') installed"
 fi
 
 # =============================================================================
-# 8. Clone dotfiles + stow
-# NOTE: This happens BEFORE Oh My Zsh so that OMZ config is written on top
-#       of the stowed .zshrc, not the other way around.
+# 14. Dotfiles
 # =============================================================================
-section "Cloning dotfiles"
+step "dotfiles — cloning your digital DNA 🧬"
 
 if [ -d "$DOTFILES_DIR/.git" ]; then
-  warn "Dotfiles already cloned — pulling latest"
-  git -C "$DOTFILES_DIR" pull --ff-only
+  skip "dotfiles already cloned — pulling latest"
+  git -C "$DOTFILES_DIR" pull --ff-only >> "$LOG_FILE" 2>&1
 else
-  git clone "$DOTFILES_REPO" "$DOTFILES_DIR"
-  log "Cloned dotfiles to $DOTFILES_DIR"
+  git clone "$DOTFILES_REPO" "$DOTFILES_DIR" >> "$LOG_FILE" 2>&1
+  ok "dotfiles cloned to $DOTFILES_DIR"
 fi
 
-section "Symlinking configs with GNU Stow"
 cd "$DOTFILES_DIR"
-
 for dir in git tmux zshrc; do
   if [ -d "$DOTFILES_DIR/$dir" ]; then
-    log "Stowing: $dir"
-    # --adopt pulls any pre-existing home files into the repo, then we restore
-    stow --adopt --restow --target="$HOME" "$dir" 2>&1 || \
-      warn "Stow conflict for '$dir' — check for conflicts manually"
-  else
-    warn "Directory '$dir' not found in dotfiles — skipping"
+    stow --adopt --restow --target="$HOME" "$dir" >> "$LOG_FILE" 2>&1 || \
+      warn "stow conflict for '$dir' — check manually"
   fi
 done
+git -C "$DOTFILES_DIR" checkout -- . >> "$LOG_FILE" 2>&1
 
-# Restore repo to its committed state (undoes any --adopt overwrites in the repo)
-# ~/ symlinks are now established and will reflect the repo's original content.
-git -C "$DOTFILES_DIR" checkout -- .
-
-log "Dotfiles symlinked"
+ok "configs symlinked via stow"
 
 # =============================================================================
-# 9. Oh My Zsh
-# NOTE: KEEP_ZSHRC=yes preserves the stowed .zshrc from your dotfiles repo.
-#       We then patch it below to add OMZ bootstrap lines if they're missing.
+# 15. Oh My Zsh + plugins
 # =============================================================================
-section "Installing Oh My Zsh"
+step "Oh My Zsh — making your terminal look gorgeous 💅"
 
 OMZ_DIR="$HOME/.oh-my-zsh"
 
 if [ -d "$OMZ_DIR" ]; then
-  warn "Oh My Zsh already installed — updating"
-  git -C "$OMZ_DIR" pull --ff-only
+  skip "Oh My Zsh — updating"
+  git -C "$OMZ_DIR" pull --ff-only >> "$LOG_FILE" 2>&1
 else
   RUNZSH=no CHSH=no KEEP_ZSHRC=yes \
-    sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
-  log "Oh My Zsh installed"
+    sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" \
+    >> "$LOG_FILE" 2>&1
+  ok "Oh My Zsh installed"
 fi
 
-# ── zsh-syntax-highlighting ──────────────────────────────────────────────────
 ZSH_SYNTAX_DIR="${ZSH_CUSTOM:-$OMZ_DIR/custom}/plugins/zsh-syntax-highlighting"
 if [ -d "$ZSH_SYNTAX_DIR" ]; then
-  warn "zsh-syntax-highlighting already installed — updating"
-  git -C "$ZSH_SYNTAX_DIR" pull --ff-only
+  git -C "$ZSH_SYNTAX_DIR" pull --ff-only >> "$LOG_FILE" 2>&1
 else
-  git clone https://github.com/zsh-users/zsh-syntax-highlighting.git "$ZSH_SYNTAX_DIR"
-  log "zsh-syntax-highlighting installed"
+  git clone https://github.com/zsh-users/zsh-syntax-highlighting.git "$ZSH_SYNTAX_DIR" \
+    >> "$LOG_FILE" 2>&1
 fi
 
-# ── zsh-autosuggestions ───────────────────────────────────────────────────────
 ZSH_AUTOSUG_DIR="${ZSH_CUSTOM:-$OMZ_DIR/custom}/plugins/zsh-autosuggestions"
 if [ -d "$ZSH_AUTOSUG_DIR" ]; then
-  warn "zsh-autosuggestions already installed — updating"
-  git -C "$ZSH_AUTOSUG_DIR" pull --ff-only
+  git -C "$ZSH_AUTOSUG_DIR" pull --ff-only >> "$LOG_FILE" 2>&1
 else
-  git clone https://github.com/zsh-users/zsh-autosuggestions.git "$ZSH_AUTOSUG_DIR"
-  log "zsh-autosuggestions installed"
+  git clone https://github.com/zsh-users/zsh-autosuggestions.git "$ZSH_AUTOSUG_DIR" \
+    >> "$LOG_FILE" 2>&1
 fi
 
-# ── Powerlevel10k ────────────────────────────────────────────────────────────
 P10K_DIR="${ZSH_CUSTOM:-$OMZ_DIR/custom}/themes/powerlevel10k"
 if [ -d "$P10K_DIR" ]; then
-  warn "Powerlevel10k already installed — updating"
-  git -C "$P10K_DIR" pull --ff-only
+  git -C "$P10K_DIR" pull --ff-only >> "$LOG_FILE" 2>&1
 else
-  git clone --depth=1 https://github.com/romkatv/powerlevel10k.git "$P10K_DIR"
-  log "Powerlevel10k installed"
+  git clone --depth=1 https://github.com/romkatv/powerlevel10k.git "$P10K_DIR" \
+    >> "$LOG_FILE" 2>&1
 fi
 
+ok "oh-my-zsh + zsh-syntax-highlighting + zsh-autosuggestions + powerlevel10k"
+
 # =============================================================================
-# 10. Patch .zshrc with OMZ bootstrap lines
-# The stowed .zshrc may not have OMZ setup if the dotfiles predate this script.
-# We add any missing lines without touching lines that already exist.
+# 16. .zshrc
 # =============================================================================
-section "Configuring .zshrc"
+step ".zshrc — patching the shell config matrix 🔧"
 
 ZSHRC="$HOME/.zshrc"
-
-# Ensure .zshrc exists (stow may have left it missing if the dotfiles dir was empty)
 touch "$ZSHRC"
 
-# 1. ZSH variable (must come before sourcing OMZ)
 ensure_pattern "$ZSHRC" '^export ZSH=' 'export ZSH="$HOME/.oh-my-zsh"'
 
-# 2. Theme — replace existing ZSH_THEME line or add it
 if grep -q '^ZSH_THEME=' "$ZSHRC"; then
   sed -i 's|^ZSH_THEME=.*|ZSH_THEME="powerlevel10k/powerlevel10k"|' "$ZSHRC"
-  log "ZSH_THEME updated to powerlevel10k"
 else
   echo 'ZSH_THEME="powerlevel10k/powerlevel10k"' >> "$ZSHRC"
-  log "ZSH_THEME added to .zshrc"
 fi
 
-# 3. Plugins — replace existing plugins line or add one
 if grep -q '^plugins=(' "$ZSHRC"; then
-  # Inject missing plugins into the existing array
   for plugin in git zsh-syntax-highlighting zsh-autosuggestions; do
-    if ! grep -q "$plugin" "$ZSHRC"; then
+    grep -q "$plugin" "$ZSHRC" || \
       sed -i "s/^plugins=(\(.*\))/plugins=(\1 $plugin)/" "$ZSHRC"
-      log "Added $plugin to plugins array"
-    fi
   done
 else
   echo 'plugins=(git zsh-syntax-highlighting zsh-autosuggestions)' >> "$ZSHRC"
-  log "Added plugins line to .zshrc"
 fi
 
-# 4. Source OMZ (must come after ZSH= and plugins= lines)
 ensure_pattern "$ZSHRC" 'oh-my-zsh.sh' 'source "$ZSH/oh-my-zsh.sh"'
-
-# 5. PATH additions
 ensure_line "$ZSHRC" 'export PATH="$HOME/.local/bin:$PATH"'
 ensure_line "$ZSHRC" 'export BUN_INSTALL="$HOME/.bun"; export PATH="$BUN_INSTALL/bin:$PATH"'
 
-# 6. p10k instant prompt (performance boost — add near the top if missing)
 P10K_INSTANT='if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
 fi'
 if ! grep -q 'p10k-instant-prompt' "$ZSHRC"; then
-  # Prepend to file
   echo -e "$P10K_INSTANT\n$(cat "$ZSHRC")" > "$ZSHRC"
-  log "Added p10k instant prompt to .zshrc"
 fi
 
-# 7. Source p10k config if ~/.p10k.zsh exists
 ensure_pattern "$ZSHRC" '\.p10k\.zsh' '[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh'
 
-log ".zshrc configured"
+ok ".zshrc configured"
 
 # =============================================================================
-# 11. MesloLGS NF font (required for p10k icons)
+# 17. Fonts
 # =============================================================================
-section "Installing MesloLGS NF (Powerlevel10k font)"
+step "MesloLGS NF — you are now legally a nerd 🤓"
 
 FONT_DIR="$HOME/.local/share/fonts"
 mkdir -p "$FONT_DIR"
@@ -507,186 +510,181 @@ if [ "$FONTS_NEEDED" = "true" ]; then
   FONT_BASE="https://github.com/romkatv/powerlevel10k-media/raw/master"
   for font in "MesloLGS NF Regular.ttf" "MesloLGS NF Bold.ttf" \
               "MesloLGS NF Italic.ttf" "MesloLGS NF Bold Italic.ttf"; do
-    log "Downloading: $font"
-    curl -fsSL "${FONT_BASE}/${font// /%20}" -o "$FONT_DIR/$font"
+    curl -fsSL "${FONT_BASE}/${font// /%20}" -o "$FONT_DIR/$font" >> "$LOG_FILE" 2>&1
   done
-  fc-cache -fv "$FONT_DIR" > /dev/null 2>&1
-  log "MesloLGS NF installed — set your terminal font to 'MesloLGS NF'"
+  fc-cache -fv "$FONT_DIR" >> "$LOG_FILE" 2>&1
+  ok "MesloLGS NF installed — set your terminal font to 'MesloLGS NF'"
 else
-  warn "MesloLGS NF fonts already present — skipping"
+  skip "MesloLGS NF fonts already present"
 fi
 
 # =============================================================================
-# 12. Neovim WSL2 clipboard — win32yank
-# WSL2 has no X server, so xclip/xsel don't work. win32yank bridges to the
-# Windows clipboard via /mnt/c and is auto-detected by Neovim's clipboard=unnamedplus.
+# 18. win32yank (WSL2 clipboard)
 # =============================================================================
-section "Installing win32yank (Neovim WSL2 clipboard)"
+step "win32yank — bridging WSL2 to Windows clipboard 📋"
 
 WIN32YANK_PATH="/usr/local/bin/win32yank.exe"
 
 if [ -f "$WIN32YANK_PATH" ]; then
-  warn "win32yank already installed — skipping"
+  skip "win32yank already installed"
 else
   WIN32YANK_VERSION=$(latest_github_release "equalsraf/win32yank")
   WIN32YANK_VERSION_CLEAN="${WIN32YANK_VERSION#v}"
   WIN32YANK_URL="https://github.com/equalsraf/win32yank/releases/download/${WIN32YANK_VERSION}/win32yank-x64.zip"
-
-  log "Downloading win32yank $WIN32YANK_VERSION_CLEAN..."
-  curl -fsSL "$WIN32YANK_URL" -o "$TMPDIR_BUILD/win32yank.zip"
-  unzip -q "$TMPDIR_BUILD/win32yank.zip" -d "$TMPDIR_BUILD/win32yank"
+  curl -fsSL "$WIN32YANK_URL" -o "$TMPDIR_BUILD/win32yank.zip" >> "$LOG_FILE" 2>&1
+  unzip -q "$TMPDIR_BUILD/win32yank.zip" -d "$TMPDIR_BUILD/win32yank" >> "$LOG_FILE" 2>&1
   sudo install -m 0755 "$TMPDIR_BUILD/win32yank/win32yank.exe" "$WIN32YANK_PATH"
-  log "win32yank installed at $WIN32YANK_PATH"
+  ok "win32yank $WIN32YANK_VERSION_CLEAN installed"
 fi
 
-# Ensure clipboard=unnamedplus is set in Neovim config
 NVIM_OPTS="$HOME/.config/nvim/lua/config/options.lua"
 if [ -f "$NVIM_OPTS" ]; then
-  grep -q 'clipboard' "$NVIM_OPTS" \
-    || echo 'vim.opt.clipboard = "unnamedplus"' >> "$NVIM_OPTS"
-  log "clipboard=unnamedplus set in $NVIM_OPTS"
-else
-  warn "Could not find $NVIM_OPTS — add 'vim.opt.clipboard = \"unnamedplus\"' to your Neovim config manually"
+  grep -q 'clipboard' "$NVIM_OPTS" || \
+    echo 'vim.opt.clipboard = "unnamedplus"' >> "$NVIM_OPTS"
 fi
 
 # =============================================================================
-# 13. Neovim language providers
-# These allow :checkhealth to show green for all major language integrations.
+# 19. Neovim providers
 # =============================================================================
-section "Installing Neovim language providers"
+step "Neovim providers — feeding the plugin beast 🍖"
 
-# ── Node.js provider ─────────────────────────────────────────────────────────
-log "Installing neovim npm package (Node provider)..."
-npm install -g neovim
-log "Node provider ready"
+if npm list -g --depth=0 2>/dev/null | grep -q ' neovim@'; then
+  skip "neovim npm package"
+else
+  npm install -g neovim >> "$LOG_FILE" 2>&1
+  ok "node provider ready"
+fi
 
-# ── tree-sitter CLI (required to build certain treesitter parsers) ────────────
-log "Installing tree-sitter-cli (required by nvim-treesitter parser builds)..."
-npm install -g tree-sitter-cli
-log "tree-sitter-cli ready"
+if command -v tree-sitter &>/dev/null; then
+  skip "tree-sitter-cli"
+else
+  npm install -g tree-sitter-cli >> "$LOG_FILE" 2>&1
+  ok "tree-sitter-cli ready"
+fi
 
-# ── Python provider ───────────────────────────────────────────────────────────
-# python3-pynvim was installed via apt above (avoids PEP 668 issues)
-log "Python provider (pynvim): installed via apt"
+# python3-pynvim installed via apt above
+ok "python provider ready (pynvim via apt)"
 
-# ── Perl provider ─────────────────────────────────────────────────────────────
-log "Installing Neovim::Ext (Perl provider)..."
-cpanm -n Neovim::Ext 2>/dev/null || warn "Perl provider install had warnings — run 'cpanm Neovim::Ext' manually"
-log "Perl provider ready"
+if perl -MNeovim::Ext -e 1 2>/dev/null; then
+  skip "Neovim::Ext (perl provider)"
+else
+  cpanm -n Neovim::Ext >> "$LOG_FILE" 2>&1 || warn "perl provider had warnings — run 'cpanm Neovim::Ext' manually"
+  ok "perl provider ready"
+fi
 
-# ── Ruby provider ─────────────────────────────────────────────────────────────
-log "Installing neovim gem (Ruby provider)..."
-sudo gem install neovim --quiet
-log "Ruby provider ready"
+if gem list neovim -i &>/dev/null; then
+  skip "neovim gem (ruby provider)"
+else
+  sudo gem install neovim --quiet >> "$LOG_FILE" 2>&1
+  ok "ruby provider ready"
+fi
 
-# ── neovim-remote (nvr — required by lazygit.nvim neovim_remote integration) ──
-log "Installing neovim-remote (nvr)..."
-pipx install neovim-remote 2>/dev/null || pipx upgrade neovim-remote || true
-log "neovim-remote ready"
-
-# ── Lua (luarocks for nvim plugins that need it) ──────────────────────────────
-log "Lua $(lua5.4 -v 2>&1 | head -1) + luarocks $(luarocks --version | head -1) ready"
+if command -v nvr &>/dev/null; then
+  skip "neovim-remote (nvr)"
+else
+  pipx install neovim-remote >> "$LOG_FILE" 2>&1
+  ok "neovim-remote (nvr) ready"
+fi
 
 # =============================================================================
-# Neovim config — QuentinGibson/kickstart.nvim
+# 20. Neovim config (kickstart.nvim)
 # =============================================================================
-section "Installing Neovim config (kickstart.nvim)"
+step "Neovim config — cloning your kickstart setup 🥾"
 
 NVIM_CONFIG_REPO="https://github.com/QuentinGibson/kickstart.nvim"
 NVIM_CONFIG_DIR="$HOME/.config/nvim"
 
 if [ -d "$NVIM_CONFIG_DIR/.git" ]; then
-  warn "Neovim config already cloned — pulling latest"
-  git -C "$NVIM_CONFIG_DIR" pull --ff-only
+  skip "kickstart.nvim already cloned — pulling latest"
+  git -C "$NVIM_CONFIG_DIR" pull --ff-only >> "$LOG_FILE" 2>&1
 else
   mkdir -p "$HOME/.config"
-  git clone "$NVIM_CONFIG_REPO" "$NVIM_CONFIG_DIR"
-  log "Neovim config cloned to $NVIM_CONFIG_DIR"
+  git clone "$NVIM_CONFIG_REPO" "$NVIM_CONFIG_DIR" >> "$LOG_FILE" 2>&1
+  ok "kickstart.nvim cloned to $NVIM_CONFIG_DIR"
 fi
 
 # =============================================================================
-# 14. Neovim plugin bootstrap (lazy.nvim)
+# 21. Neovim plugins
 # =============================================================================
-section "Bootstrapping Neovim plugins"
+step "Neovim plugins — lazy loading the apocalypse 🔌"
 
 if [ -f "$HOME/.config/nvim/init.lua" ]; then
-  log "Running Neovim headless plugin sync..."
-  nvim --headless "+Lazy! sync" +qa 2>/dev/null || \
-    warn "Headless sync had warnings — run ':Lazy sync' manually on first open"
+  nvim --headless "+Lazy! sync" +qa >> "$LOG_FILE" 2>&1 || \
+    warn "headless sync had warnings — run ':Lazy sync' manually on first open"
+  ok "plugins synced"
 else
-  warn "No ~/.config/nvim/init.lua found — skipping Neovim plugin sync"
+  warn "no ~/.config/nvim/init.lua found — skipping plugin sync"
 fi
 
 # =============================================================================
-# 13. tmux plugin manager (tpm) + plugins
+# 22. tmux plugins
 # =============================================================================
-section "Setting up tmux plugin manager (tpm)"
+step "tmux plugins — moar plugins, always 🪄"
 
 TPM_DIR="$HOME/.tmux/plugins/tpm"
 if [ -d "$TPM_DIR" ]; then
-  warn "tpm already installed — pulling latest"
-  git -C "$TPM_DIR" pull --ff-only
+  skip "tpm already installed — pulling latest"
+  git -C "$TPM_DIR" pull --ff-only >> "$LOG_FILE" 2>&1
 else
-  git clone https://github.com/tmux-plugins/tpm "$TPM_DIR"
-  log "tpm installed"
+  git clone https://github.com/tmux-plugins/tpm "$TPM_DIR" >> "$LOG_FILE" 2>&1
+  ok "tpm installed"
 fi
 
 if [ -f "$HOME/.tmux.conf" ] || [ -f "$HOME/.config/tmux/tmux.conf" ]; then
-  log "Installing tmux plugins headlessly..."
-  "$TPM_DIR/bin/install_plugins" 2>/dev/null || \
-    warn "Press  prefix + I  inside tmux to install plugins manually"
+  "$TPM_DIR/bin/install_plugins" >> "$LOG_FILE" 2>&1 || \
+    warn "press prefix + I inside tmux to install plugins manually"
+  ok "tmux plugins installed"
 fi
 
 # =============================================================================
-# 14. Set zsh as default shell
+# 23. Default shell
 # =============================================================================
-section "Setting zsh as default shell"
+step "zsh — making it your default, forever ⚡"
 
 if [ "$SHELL" != "$(which zsh)" ]; then
   chsh -s "$(which zsh)"
-  log "Default shell changed to zsh — restart terminal to take effect"
+  ok "default shell set to zsh — restart terminal to take effect"
 else
-  log "zsh is already the default shell"
+  skip "zsh is already the default shell"
 fi
 
 # =============================================================================
 # Done
 # =============================================================================
+
 echo ""
-echo -e "${GREEN}╔══════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║          Setup complete!                 ║${NC}"
-echo -e "${GREEN}╚══════════════════════════════════════════╝${NC}"
+_bar
 echo ""
-echo "  Installed:"
-echo "    python3     $(python3 --version 2>&1)"
-echo "    bun         $(bun --version 2>/dev/null || echo 'restart shell to verify')"
-echo "    node        $(node --version 2>/dev/null || echo 'restart shell to verify')"
-echo "    pnpm        $(pnpm --version 2>/dev/null || echo 'restart shell to verify')"
-echo "    claude      $(claude --version 2>/dev/null || echo 'restart shell to verify')"
-echo "    gh          $(gh --version 2>&1 | head -1)"
-echo "    rust        $(rustc --version 2>/dev/null || echo 'restart shell to verify')"
-echo "    lua         $(lua5.4 -v 2>&1)"
-echo "    nvim        $(nvim --version 2>&1 | head -1)"
-echo "    nvim config  QuentinGibson/kickstart.nvim → ~/.config/nvim"
-echo "    nvim providers: node, python (pynvim), perl, ruby, tree-sitter-cli, neovim-remote
-    php         $(php --version 2>&1 | head -1)
-    composer    $(composer --version 2>/dev/null | head -1 || echo 'restart shell to verify')
-    java        $(java -version 2>&1 | head -1)"
-echo "    tmux        $(tmux -V 2>&1)"
-echo "    lazygit     $(lazygit --version 2>&1 | grep -oP 'version=\K[^,]+' || echo 'installed')"
-echo "    oh-my-zsh   $OMZ_DIR"
-echo "    theme       powerlevel10k/powerlevel10k"
-echo "    plugins     git, zsh-syntax-highlighting, zsh-autosuggestions"
-echo "    font        MesloLGS NF"
+echo -e "${BOLD}${GREEN}  ╭──────────────────────────────────────────────────╮${NC}"
+echo -e "${BOLD}${GREEN}  │${NC}              🎉  all done! ship it.              ${BOLD}${GREEN}│${NC}"
+echo -e "${BOLD}${GREEN}  ╰──────────────────────────────────────────────────╯${NC}"
 echo ""
-echo "  Next steps:"
-echo "  1. Set terminal font     →  'MesloLGS NF' in Windows Terminal settings"
-echo "  2. Restart terminal      →  exec zsh   (p10k wizard runs automatically)"
-echo "  3. Auth GitHub CLI       →  gh auth login"
-echo "  3b. Start Claude Code    →  claude"
-echo "  4. Open nvim             →  plugins finish on first launch"
-echo "  5. Open tmux, press      →  prefix + I   to confirm plugins"
-echo "  6. Run lazygit           →  lazygit   (inside any git repo)"
+echo -e "  ${BOLD}installed:${NC}"
+echo -e "  ${GREEN}·${NC}  python      $(python3 --version 2>&1)"
+echo -e "  ${GREEN}·${NC}  bun         $(bun --version 2>/dev/null || echo 'restart shell to verify')"
+echo -e "  ${GREEN}·${NC}  node        $(node --version 2>/dev/null || echo 'restart shell to verify')"
+echo -e "  ${GREEN}·${NC}  pnpm        $(pnpm --version 2>/dev/null || echo 'restart shell to verify')"
+echo -e "  ${GREEN}·${NC}  claude      $(claude --version 2>/dev/null || echo 'restart shell to verify')"
+echo -e "  ${GREEN}·${NC}  gh          $(gh --version 2>&1 | head -1)"
+echo -e "  ${GREEN}·${NC}  rust        $(rustc --version 2>/dev/null || echo 'restart shell to verify')"
+echo -e "  ${GREEN}·${NC}  php         $(php --version 2>&1 | head -1)"
+echo -e "  ${GREEN}·${NC}  composer    $(composer --version 2>/dev/null | head -1 || echo 'restart shell to verify')"
+echo -e "  ${GREEN}·${NC}  java        $(java -version 2>&1 | head -1)"
+echo -e "  ${GREEN}·${NC}  nvim        $(nvim --version 2>&1 | head -1)"
+echo -e "  ${GREEN}·${NC}  nvim config QuentinGibson/kickstart.nvim"
+echo -e "  ${GREEN}·${NC}  tmux        $(tmux -V 2>&1)"
+echo -e "  ${GREEN}·${NC}  lazygit     $(lazygit --version 2>&1 | grep -oP 'version=\K[^,]+' || echo 'installed')"
+echo -e "  ${GREEN}·${NC}  theme       powerlevel10k"
+echo -e "  ${GREEN}·${NC}  font        MesloLGS NF"
 echo ""
-echo "  Tip: re-run the p10k wizard anytime →  p10k configure"
+echo -e "  ${BOLD}next steps:${NC}"
+echo -e "  ${BLUE}1.${NC}  set terminal font  →  'MesloLGS NF' in Windows Terminal"
+echo -e "  ${BLUE}2.${NC}  restart terminal   →  exec zsh  (p10k wizard runs automatically)"
+echo -e "  ${BLUE}3.${NC}  auth GitHub        →  gh auth login"
+echo -e "  ${BLUE}4.${NC}  start Claude       →  claude"
+echo -e "  ${BLUE}5.${NC}  open nvim          →  plugins finish on first launch"
+echo -e "  ${BLUE}6.${NC}  open tmux          →  prefix + I to confirm plugins"
+echo ""
+echo -e "  ${BLUE}tip:${NC} re-run the p10k wizard anytime → p10k configure"
+echo -e "  ${BLUE}tip:${NC} full logs saved at $LOG_FILE"
 echo ""
