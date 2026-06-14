@@ -386,7 +386,7 @@ else
 fi
 
 cd "$DOTFILES_DIR"
-for dir in git tmux zshrc; do
+for dir in git tmux zshrc claude; do
   if [ -d "$DOTFILES_DIR/$dir" ]; then
     stow --adopt --restow --target="$HOME" "$dir" >> "$LOG_FILE" 2>&1 || \
       warn "stow conflict for '$dir' — check manually"
