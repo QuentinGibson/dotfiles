@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # =============================================================================
-# WSL2 Ubuntu 24.04 LTS - Dev Environment Setup
+# Arch Linux - Dev Environment Setup
 # Installs: Python, Bun, Node.js (nvm), Claude Code, pnpm,
 #           Lua, Rust, Neovim + providers + kickstart config,
-#           PHP 8.2, Java 17, Composer, tmux, lazygit, gh CLI,
+#           PHP, Java 17, Composer, tmux, lazygit, gh CLI,
 #           zsh, Oh My Zsh, Powerlevel10k
 # Dotfiles: https://github.com/QuentinGibson/dotfiles
 # =============================================================================
@@ -48,6 +48,11 @@ ensure_pattern() {
   grep -q "$pattern" "$file" 2>/dev/null || echo "$line" >> "$file"
 }
 
+# Helper: install packages with yay (skips already-installed packages)
+yay_install() {
+  yay -S --needed --noconfirm "$@" >> "$LOG_FILE" 2>&1
+}
+
 # ── Output helpers ─────────────────────────────────────────────────────────────
 
 _bar() {
@@ -72,11 +77,21 @@ skip() { echo -e "  ${YELLOW}↩${NC}  $1  ${BLUE}(already installed)${NC}"; }
 warn() { echo -e "  ${YELLOW}!${NC}  $1"; }
 fail() { echo -e "  ${RED}✗${NC}  $1"; exit 1; }
 
+# ── Verify yay is available ────────────────────────────────────────────────────
+
+if ! command -v yay &>/dev/null; then
+  echo -e "  ${RED}✗${NC}  yay (AUR helper) not found — installing..."
+  sudo pacman -S --needed --noconfirm git base-devel >> "$LOG_FILE" 2>&1
+  git clone https://aur.archlinux.org/yay.git "$TMPDIR_BUILD/yay" >> "$LOG_FILE" 2>&1
+  (cd "$TMPDIR_BUILD/yay" && makepkg -si --noconfirm) >> "$LOG_FILE" 2>&1
+  ok "yay installed"
+fi
+
 # ── Header ─────────────────────────────────────────────────────────────────────
 
 echo ""
 echo -e "${BOLD}${BLUE}  ╭──────────────────────────────────────────────────╮${NC}"
-echo -e "${BOLD}${BLUE}  │${NC}  🚀  dev environment setup · WSL2 Ubuntu 24.04  ${BOLD}${BLUE}│${NC}"
+echo -e "${BOLD}${BLUE}  │${NC}  🚀  dev environment setup · Arch Linux          ${BOLD}${BLUE}│${NC}"
 echo -e "${BOLD}${BLUE}  ╰──────────────────────────────────────────────────╯${NC}"
 echo ""
 echo -e "  ${BLUE}logs →${NC} $LOG_FILE"
@@ -88,55 +103,32 @@ echo ""
 # =============================================================================
 step "system packages — the boring-but-necessary stuff"
 
-_base_pkgs=(
-  git curl wget unzip tar
-  build-essential autoconf automake pkg-config
-  libevent-dev libncurses-dev bison byacc
-  zsh stow fontconfig
-  python3 python3-venv python3-dev python3-full pipx python3-pynvim
-  lua5.4 luarocks
-  perl cpanminus libterm-readline-gnu-perl
-  ruby ruby-dev
-  openjdk-17-jdk
-  ripgrep fd-find fzf
-  xclip xsel
-  ca-certificates gnupg lsb-release software-properties-common
-)
+yay_install \
+  git curl wget unzip tar \
+  base-devel autoconf automake pkgconf \
+  libevent ncurses bison byacc \
+  zsh stow fontconfig \
+  python python-pipx python-pynvim \
+  lua luarocks \
+  perl perl-app-cpanminus perl-term-readline-gnu \
+  ruby \
+  jdk17-openjdk \
+  ripgrep fd fzf \
+  xclip xsel \
+  ca-certificates gnupg
 
-_missing=()
-for _p in "${_base_pkgs[@]}"; do
-  dpkg -s "$_p" &>/dev/null || _missing+=("$_p")
-done
+ok "base packages ready"
 
-if [ ${#_missing[@]} -gt 0 ]; then
-  ok "installing ${#_missing[@]} missing package(s): ${_missing[*]}"
-  sudo apt-get update -qq >> "$LOG_FILE" 2>&1
-  sudo apt-get install -y "${_missing[@]}" >> "$LOG_FILE" 2>&1
-  ok "base packages ready"
+# =============================================================================
+# 2. PHP
+# =============================================================================
+step "PHP — for the Laravel enjoyers in the room 🐘"
+
+if pacman -Qi php &>/dev/null; then
+  skip "PHP $(php --version | head -1 | awk '{print $2}')"
 else
-  skip "all base packages"
-fi
-
-# =============================================================================
-# 2. PHP 8.2
-# =============================================================================
-step "PHP 8.2 — for the Laravel enjoyers in the room 🐘"
-
-_php_pkgs=(php8.2 php8.2-cli php8.2-mbstring php8.2-xml php8.2-curl php8.2-zip php8.2-xdebug)
-
-_missing=()
-for _p in "${_php_pkgs[@]}"; do
-  dpkg -s "$_p" &>/dev/null || _missing+=("$_p")
-done
-
-if [ ${#_missing[@]} -gt 0 ]; then
-  ok "installing ${#_missing[@]} missing PHP package(s): ${_missing[*]}"
-  sudo add-apt-repository -y ppa:ondrej/php >> "$LOG_FILE" 2>&1
-  sudo apt-get update -qq >> "$LOG_FILE" 2>&1
-  sudo apt-get install -y "${_missing[@]}" >> "$LOG_FILE" 2>&1
+  yay_install php xdebug
   ok "PHP $(php --version | head -1 | awk '{print $2}') ready"
-else
-  skip "PHP $(php --version | head -1 | awk '{print $2}') — all packages present"
 fi
 
 # =============================================================================
@@ -145,10 +137,6 @@ fi
 step "Python — everybody's favourite scripting snake 🐍"
 
 export PATH="$HOME/.local/bin:$PATH"
-
-if ! command -v python &>/dev/null; then
-  sudo apt-get install -y python-is-python3 >> "$LOG_FILE" 2>&1
-fi
 
 pipx ensurepath --force >> "$LOG_FILE" 2>&1
 
@@ -261,15 +249,7 @@ step "GitHub CLI — pushing to main at 3am, we see you 🐙"
 if command -v gh &>/dev/null; then
   skip "gh $(gh --version | head -1)"
 else
-  curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-    2>>"$LOG_FILE" \
-    | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg >> "$LOG_FILE" 2>&1
-  sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
-  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] \
-    https://cli.github.com/packages stable main" \
-    | sudo tee /etc/apt/sources.list.d/github-cli.list >> "$LOG_FILE" 2>&1
-  sudo apt-get update -qq >> "$LOG_FILE" 2>&1
-  sudo apt-get install -y gh >> "$LOG_FILE" 2>&1
+  yay_install github-cli
   ok "gh $(gh --version | head -1)"
 fi
 
@@ -299,9 +279,7 @@ step "Neovim — vim, but it actually slaps ✨"
 if command -v nvim &>/dev/null; then
   skip "Neovim $(nvim --version | head -1)"
 else
-  sudo add-apt-repository -y ppa:neovim-ppa/unstable >> "$LOG_FILE" 2>&1
-  sudo apt-get update -qq >> "$LOG_FILE" 2>&1
-  sudo apt-get install -y neovim >> "$LOG_FILE" 2>&1
+  yay_install neovim
   ok "Neovim $(nvim --version | head -1) ready"
 fi
 
@@ -571,8 +549,8 @@ else
   ok "tree-sitter-cli ready"
 fi
 
-# python3-pynvim installed via apt above
-ok "python provider ready (pynvim via apt)"
+# python-pynvim installed via yay above
+ok "python provider ready (pynvim via yay)"
 
 if perl -MNeovim::Ext -e 1 2>/dev/null; then
   skip "Neovim::Ext (perl provider)"
@@ -676,9 +654,9 @@ echo -e "  ${GREEN}✓${NC}  Python      $(python3 --version 2>&1)  +  black, ru
 echo -e "  ${GREEN}✓${NC}  Node.js     $(node --version 2>/dev/null || echo 'restart shell to verify')  via nvm  (npm $(npm --version 2>/dev/null || echo '?'))"
 echo -e "  ${GREEN}✓${NC}  Bun         $(bun --version 2>/dev/null || echo 'restart shell to verify')"
 echo -e "  ${GREEN}✓${NC}  Rust        $(rustc --version 2>/dev/null || echo 'restart shell to verify')"
-echo -e "  ${GREEN}✓${NC}  PHP         $(php --version 2>&1 | head -1)  (via ondrej/php PPA)"
+echo -e "  ${GREEN}✓${NC}  PHP         $(php --version 2>&1 | head -1)"
 echo -e "  ${GREEN}✓${NC}  Java        $(java -version 2>&1 | head -1)"
-echo -e "  ${GREEN}✓${NC}  Lua         $(lua5.4 -v 2>&1)  +  luarocks"
+echo -e "  ${GREEN}✓${NC}  Lua         $(lua -v 2>&1)  +  luarocks"
 echo ""
 
 echo -e "  ${BOLD}${BLUE}── package managers ──────────────────────────────────${NC}"
@@ -693,11 +671,11 @@ echo -e "  ${GREEN}✓${NC}  lazygit     $(lazygit --version 2>&1 | grep -oP 've
 echo -e "  ${GREEN}✓${NC}  tmux        $(tmux -V 2>&1)  (built from source)"
 echo -e "  ${GREEN}✓${NC}  ripgrep     $(rg --version | head -1)"
 echo -e "  ${GREEN}✓${NC}  fzf         $(fzf --version)"
-echo -e "  ${GREEN}✓${NC}  fd          $(fd --version 2>/dev/null || fdfind --version 2>/dev/null || echo 'installed')"
+echo -e "  ${GREEN}✓${NC}  fd          $(fd --version 2>/dev/null || echo 'installed')"
 echo ""
 
 echo -e "  ${BOLD}${BLUE}── neovim ────────────────────────────────────────────${NC}"
-echo -e "  ${GREEN}✓${NC}  Neovim      $(nvim --version 2>&1 | head -1)  (via neovim-ppa/unstable)"
+echo -e "  ${GREEN}✓${NC}  Neovim      $(nvim --version 2>&1 | head -1)"
 echo -e "  ${GREEN}✓${NC}  config      QuentinGibson/kickstart.nvim  →  ~/.config/nvim"
 echo -e "  ${GREEN}✓${NC}  plugins     bootstrapped via lazy.nvim"
 echo -e "  ${GREEN}✓${NC}  providers   node · python (pynvim) · perl · ruby"
@@ -709,7 +687,7 @@ echo -e "  ${BOLD}${BLUE}── shell & terminal ──────────�
 echo -e "  ${GREEN}✓${NC}  zsh         $(zsh --version)  (default shell)"
 echo -e "  ${GREEN}✓${NC}  Oh My Zsh   plugins: git · zsh-syntax-highlighting · zsh-autosuggestions"
 echo -e "  ${GREEN}✓${NC}  theme       powerlevel10k"
-echo -e "  ${GREEN}✓${NC}  font        MesloLGS NF  (set this in Windows Terminal)"
+echo -e "  ${GREEN}✓${NC}  font        MesloLGS NF  (set this in your terminal settings)"
 echo -e "  ${GREEN}✓${NC}  tmux tpm    plugins installed"
 echo ""
 
@@ -719,7 +697,7 @@ echo -e "  ${GREEN}✓${NC}  symlinked   git · tmux · zshrc  (via GNU stow)"
 echo ""
 
 echo -e "  ${BOLD}next steps:${NC}"
-echo -e "  ${CYAN}1.${NC}  set terminal font  →  'MesloLGS NF' in Windows Terminal settings"
+echo -e "  ${CYAN}1.${NC}  set terminal font  →  'MesloLGS NF' in your terminal settings"
 echo -e "  ${CYAN}2.${NC}  restart terminal   →  exec zsh  (p10k wizard runs automatically)"
 echo -e "  ${CYAN}3.${NC}  auth GitHub        →  gh auth login"
 echo -e "  ${CYAN}4.${NC}  start Claude       →  claude"
